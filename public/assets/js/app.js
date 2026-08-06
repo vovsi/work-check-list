@@ -285,7 +285,11 @@
         const pending = state.checklist.filter((item) => !item.is_done);
 
         if (pending.length === 0) {
-            checklistEl.innerHTML = '<li class="checklist-empty">Все пункты выполнены</li>';
+            checklistEl.innerHTML =
+                '<li class="checklist-empty">' +
+                '<span class="checklist-empty-text">Все пункты выполнены</span>' +
+                '<span class="checklist-empty-icon">👍</span>' +
+                '</li>';
             renderProgress();
             return;
         }
@@ -371,17 +375,42 @@
 
     // ==================== Загрузка / обновление задачи ====================
 
+    function applyTaskState(data, link) {
+        state.task = data.task;
+        state.checklist = data.checklist;
+        localStorage.setItem(TASK_LINK_STORAGE_KEY, link);
+        showTaskScreen();
+    }
+
+    /**
+     * Пользователь явно вставил ссылку на экране ввода — находит либо создаёт задачу.
+     * Для уже существующей задачи применяется бизнес-правило сброса чек-листа
+     * (см. ChecklistRepository::resetOnReopen) — это осознанное «переоткрытие» задачи.
+     */
     async function loadTask(link) {
         try {
             const data = await apiCall('../api/task.php', { link });
-            state.task = data.task;
-            state.checklist = data.checklist;
-            localStorage.setItem(TASK_LINK_STORAGE_KEY, link);
-            showTaskScreen();
+            applyTaskState(data, link);
         } catch (e) {
             linkScreen.classList.remove('hidden');
             linkError.textContent = e.message;
             linkError.classList.remove('hidden');
+        }
+    }
+
+    /**
+     * Восстанавливает уже открытую задачу после обновления страницы (ссылка из localStorage).
+     * В отличие от loadTask — НЕ переоткрытие, поэтому чек-лист не сбрасывается: читаем
+     * текущее состояние как есть через отдельный read-only эндпоинт api/state.php.
+     */
+    async function restoreTask(link) {
+        try {
+            const data = await apiCall('../api/state.php', { link });
+            applyTaskState(data, link);
+        } catch (e) {
+            // Сохранённая ссылка больше не актуальна (например, БД была очищена) — просто
+            // показываем экран ввода, без сообщения об ошибке (это не действие пользователя)
+            showLinkScreen();
         }
     }
 
@@ -567,7 +596,7 @@
     const savedLink = localStorage.getItem(TASK_LINK_STORAGE_KEY);
     if (savedLink) {
         linkScreen.classList.add('hidden'); // прячем экран ввода на время подгрузки сохранённой задачи
-        loadTask(savedLink);
+        restoreTask(savedLink);
     } else {
         showLinkScreen();
     }

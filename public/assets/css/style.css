@@ -319,11 +319,23 @@ body {
 }
 
 .checklist-empty {
-    padding: 22px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 28px 12px;
     text-align: center;
+    cursor: default;
+}
+
+.checklist-empty-text {
     font-size: 13px;
     color: var(--text-tertiary);
-    cursor: default;
+}
+
+.checklist-empty-icon {
+    font-size: 34px;
+    line-height: 1;
 }
 
 .checkbox {

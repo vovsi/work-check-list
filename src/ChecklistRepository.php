@@ -12,22 +12,14 @@ use PDO;
 final class ChecklistRepository
 {
     /**
-     * Пункты, которые обнуляются при повторном открытии уже существующей задачи.
-     * Указаны через стабильный code, а не id/позицию — при добавлении, удалении или
-     * переупорядочивании пунктов в Database::CHECKLIST_ITEMS этот список не сломается.
+     * Пункты, которые при любом сбросе чек-листа (повторное открытие задачи или кнопка
+     * «Завершить задачу») принудительно отмечаются выполненными, а не обнуляются — это
+     * метаданные уровня задачи, которые не имеют смысла переделывать в каждом новом цикле
+     * работы над ней. Указаны через стабильный code, а не id/позицию — при добавлении,
+     * удалении или переупорядочивании пунктов в Database::CHECKLIST_ITEMS список не
+     * сломается, а новые пункты по умолчанию попадут в «обнуляемые».
      */
-    private const RESETABLE_ON_REOPEN_CODES = [
-        'pull_request',
-        'claude_review',
-        'pr_description',
-        'jira_comment',
-        'jira_description',
-        'time_tracking',
-        'send_pr',
-    ];
-
-    /** Код пункта «Создать ветку в Git» — считается выполненным, если у задачи уже есть git_branch */
-    private const GIT_BRANCH_CODE = 'git_branch';
+    private const ALWAYS_DONE_ON_RESET_CODES = ['story_points'];
 
     public function __construct(private readonly PDO $db)
     {
@@ -52,24 +44,17 @@ final class ChecklistRepository
 
     /**
      * Возвращает пункты чек-листа с отметкой выполнения для конкретной задачи.
-     * Пункт «Создать ветку в Git» считается выполненным, если у задачи уже сохранена
-     * git_branch — независимо от is_done (например, если ветка была задана раньше).
      */
     public function getStatusesForTask(int $taskId): array
     {
         $stmt = $this->db->prepare(
-            'SELECT c.id, c.code, c.title,
-                    CASE
-                        WHEN c.code = :git_branch_code AND t.git_branch IS NOT NULL THEN 1
-                        ELSE tc.is_done
-                    END AS is_done
+            'SELECT c.id, c.code, c.title, tc.is_done
              FROM checklist c
              JOIN task_checklist tc ON tc.checklist_id = c.id
-             JOIN tasks t ON t.id = tc.task_id
              WHERE tc.task_id = :task_id
              ORDER BY c.sort_order'
         );
-        $stmt->execute(['task_id' => $taskId, 'git_branch_code' => self::GIT_BRANCH_CODE]);
+        $stmt->execute(['task_id' => $taskId]);
 
         return array_map(
             static fn (array $row): array => [
@@ -95,29 +80,37 @@ final class ChecklistRepository
     }
 
     /**
-     * Сбрасывает пункты из RESETABLE_ON_REOPEN_CODES при повторном открытии уже существующей задачи.
+     * Повторное открытие уже существующей задачи. По эффекту полностью идентично
+     * «Завершить задачу» — см. resetChecklist().
      */
     public function resetOnReopen(int $taskId): void
     {
-        $this->resetItemsByCode($taskId, self::RESETABLE_ON_REOPEN_CODES);
+        $this->resetChecklist($taskId);
     }
 
     /**
-     * Сбрасывает все пункты чек-листа (кнопка «Завершить задачу»).
+     * Сбрасывает чек-лист (кнопка «Завершить задачу»). По эффекту полностью идентично
+     * повторному открытию задачи — см. resetChecklist().
      */
     public function resetAll(int $taskId): void
     {
-        $stmt = $this->db->prepare('UPDATE task_checklist SET is_done = 0 WHERE task_id = :task_id');
-        $stmt->execute(['task_id' => $taskId]);
+        $this->resetChecklist($taskId);
     }
 
-    private function resetItemsByCode(int $taskId, array $codes): void
+    /**
+     * Общая реализация сброса для resetOnReopen() и resetAll(): все пункты обнуляются,
+     * кроме ALWAYS_DONE_ON_RESET_CODES — они принудительно отмечаются выполненными.
+     */
+    private function resetChecklist(int $taskId): void
     {
-        $placeholders = implode(',', array_fill(0, count($codes), '?'));
+        $stmt = $this->db->prepare('UPDATE task_checklist SET is_done = 0 WHERE task_id = :task_id');
+        $stmt->execute(['task_id' => $taskId]);
+
+        $placeholders = implode(',', array_fill(0, count(self::ALWAYS_DONE_ON_RESET_CODES), '?'));
         $stmt = $this->db->prepare(
-            "UPDATE task_checklist SET is_done = 0
+            "UPDATE task_checklist SET is_done = 1
              WHERE task_id = ? AND checklist_id IN (SELECT id FROM checklist WHERE code IN ($placeholders))"
         );
-        $stmt->execute([$taskId, ...$codes]);
+        $stmt->execute([$taskId, ...self::ALWAYS_DONE_ON_RESET_CODES]);
     }
 }
