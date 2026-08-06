@@ -46,6 +46,14 @@
             <button id="change-task-btn" class="link-btn" title="Ввести другую задачу">сменить задачу</button>
         </div>
 
+        <!-- Прогресс выполнения чек-листа -->
+        <div class="progress" id="progress">
+            <div class="progress-track">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <div class="progress-label" id="progress-label">0%</div>
+        </div>
+
         <ul id="checklist" class="checklist"></ul>
 
         <button id="finish-task-btn" class="btn btn-primary finish-btn">Завершить задачу</button>

@@ -26,6 +26,8 @@
     const taskIdLabel = document.getElementById('task-id-label');
     const changeTaskBtn = document.getElementById('change-task-btn');
     const checklistEl = document.getElementById('checklist');
+    const progressFill = document.getElementById('progress-fill');
+    const progressLabel = document.getElementById('progress-label');
     const finishTaskBtn = document.getElementById('finish-task-btn');
     const gitBranchValue = document.getElementById('git-branch-value');
     const gitActionsBtn = document.getElementById('git-actions-btn');
@@ -272,6 +274,17 @@
             li.addEventListener('click', () => handleItemClick(item));
             checklistEl.appendChild(li);
         });
+        renderProgress();
+    }
+
+    /** Отображает долю выполненных пунктов чек-листа зелёным прогресс-баром */
+    function renderProgress() {
+        const total = state.checklist.length;
+        const done = state.checklist.filter((item) => item.is_done).length;
+        const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+
+        progressFill.style.width = `${percent}%`;
+        progressLabel.textContent = `${percent}%`;
     }
 
     function showTaskScreen() {
