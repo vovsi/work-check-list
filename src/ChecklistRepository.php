@@ -11,8 +11,20 @@ use PDO;
  */
 final class ChecklistRepository
 {
-    /** Пункты 4-10 обнуляются, если задача уже существовала в БД */
-    private const RESETABLE_ON_REOPEN = [4, 5, 6, 7, 8, 9, 10];
+    /**
+     * Пункты, которые обнуляются при повторном открытии уже существующей задачи.
+     * Указаны через стабильный code, а не id/позицию — при добавлении, удалении или
+     * переупорядочивании пунктов в Database::CHECKLIST_ITEMS этот список не сломается.
+     */
+    private const RESETABLE_ON_REOPEN_CODES = [
+        'pull_request',
+        'claude_review',
+        'pr_description',
+        'jira_comment',
+        'jira_description',
+        'time_tracking',
+        'send_pr',
+    ];
 
     public function __construct(private readonly PDO $db)
     {
@@ -23,7 +35,7 @@ final class ChecklistRepository
      */
     public function ensureRowsForTask(int $taskId): void
     {
-        $checklistIds = $this->db->query('SELECT id FROM checklist ORDER BY id')
+        $checklistIds = $this->db->query('SELECT id FROM checklist ORDER BY sort_order')
             ->fetchAll(PDO::FETCH_COLUMN);
 
         $stmt = $this->db->prepare(
@@ -41,17 +53,18 @@ final class ChecklistRepository
     public function getStatusesForTask(int $taskId): array
     {
         $stmt = $this->db->prepare(
-            'SELECT c.id, c.title, tc.is_done
+            'SELECT c.id, c.code, c.title, tc.is_done
              FROM checklist c
              JOIN task_checklist tc ON tc.checklist_id = c.id
              WHERE tc.task_id = :task_id
-             ORDER BY c.id'
+             ORDER BY c.sort_order'
         );
         $stmt->execute(['task_id' => $taskId]);
 
         return array_map(
             static fn (array $row): array => [
                 'id' => (int) $row['id'],
+                'code' => $row['code'],
                 'title' => $row['title'],
                 'is_done' => (bool) $row['is_done'],
             ],
@@ -72,11 +85,11 @@ final class ChecklistRepository
     }
 
     /**
-     * Сбрасывает пункты 3-9 при повторном открытии уже существующей задачи.
+     * Сбрасывает пункты из RESETABLE_ON_REOPEN_CODES при повторном открытии уже существующей задачи.
      */
     public function resetOnReopen(int $taskId): void
     {
-        $this->resetItems($taskId, self::RESETABLE_ON_REOPEN);
+        $this->resetItemsByCode($taskId, self::RESETABLE_ON_REOPEN_CODES);
     }
 
     /**
@@ -88,12 +101,13 @@ final class ChecklistRepository
         $stmt->execute(['task_id' => $taskId]);
     }
 
-    private function resetItems(int $taskId, array $checklistIds): void
+    private function resetItemsByCode(int $taskId, array $codes): void
     {
-        $placeholders = implode(',', array_fill(0, count($checklistIds), '?'));
+        $placeholders = implode(',', array_fill(0, count($codes), '?'));
         $stmt = $this->db->prepare(
-            "UPDATE task_checklist SET is_done = 0 WHERE task_id = ? AND checklist_id IN ($placeholders)"
+            "UPDATE task_checklist SET is_done = 0
+             WHERE task_id = ? AND checklist_id IN (SELECT id FROM checklist WHERE code IN ($placeholders))"
         );
-        $stmt->execute([$taskId, ...$checklistIds]);
+        $stmt->execute([$taskId, ...$codes]);
     }
 }

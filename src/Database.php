@@ -14,18 +14,24 @@ final class Database
 {
     private static ?PDO $connection = null;
 
-    /** Пункты чек-листа в порядке отображения (индекс + 1 = id в таблице checklist) */
+    /**
+     * Пункты чек-листа. Порядок массива = порядок отображения (sort_order).
+     * code — стабильный идентификатор смысла пункта: по нему, а не по порядку/id,
+     * определяется поведение на фронте и группы сброса при повторном открытии задачи.
+     * Порядок можно свободно менять, пункты — добавлять и удалять: код каждого
+     * существующего пункта не меняется, поэтому уже проставленные галочки не потеряют смысл.
+     */
     private const CHECKLIST_ITEMS = [
-        'Story Points указано',
-        'Статус сменен на Doing',
-        'Создать ветку в Git',
-        'PR создан',
-        'PR проверен Claude',
-        'Заполнить описание PR (ссылка, ревьюеры)',
-        'Оставить коммент в Jira',
-        'Оставить описание в Jira',
-        'Время в Jira затрекано',
-        'Отправить PR в ЛС',
+        ['code' => 'story_points', 'title' => 'Story Points указано'],
+        ['code' => 'status_doing', 'title' => 'Статус сменен на Doing'],
+        ['code' => 'git_branch', 'title' => 'Создать ветку в Git'],
+        ['code' => 'pull_request', 'title' => 'PR создан'],
+        ['code' => 'claude_review', 'title' => 'PR проверен Claude'],
+        ['code' => 'pr_description', 'title' => 'Заполнить описание PR (ссылка, ревьюеры)'],
+        ['code' => 'jira_comment', 'title' => 'Оставить коммент в Jira'],
+        ['code' => 'jira_description', 'title' => 'Оставить описание в Jira'],
+        ['code' => 'time_tracking', 'title' => 'Время в Jira затрекано'],
+        ['code' => 'send_pr', 'title' => 'Отправить PR в ЛС'],
     ];
 
     public static function connection(): PDO
@@ -48,22 +54,80 @@ final class Database
         $schema = file_get_contents(dirname(__DIR__) . '/database/schema.sql');
         $pdo->exec($schema);
 
+        // Для БД, созданных до появления code/sort_order, — добираем недостающие колонки
+        self::ensureChecklistColumns($pdo);
+        self::backfillMissingCodes($pdo);
+
+        // ON CONFLICT (code) в seedChecklist требует уникального индекса по code
+        $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_checklist_code ON checklist (code)');
+
         self::seedChecklist($pdo);
+        self::pruneRemovedItems($pdo);
+    }
+
+    /** Добавляет колонки code/sort_order в checklist, если БД создана до их появления */
+    private static function ensureChecklistColumns(PDO $pdo): void
+    {
+        $columns = array_column($pdo->query('PRAGMA table_info(checklist)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+
+        if (!in_array('code', $columns, true)) {
+            $pdo->exec('ALTER TABLE checklist ADD COLUMN code TEXT');
+        }
+        if (!in_array('sort_order', $columns, true)) {
+            $pdo->exec('ALTER TABLE checklist ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0');
+        }
     }
 
     /**
-     * Записывает канонические тексты пунктов по фиксированным id (upsert).
-     * Так правки формулировок в CHECKLIST_ITEMS применяются и к уже существующим БД.
+     * Разово проставляет code существующим строкам (по совпадению текста с CHECKLIST_ITEMS),
+     * чтобы миграция со старых версий схемы не потеряла привязку уже проставленных галочек.
+     */
+    private static function backfillMissingCodes(PDO $pdo): void
+    {
+        $rows = $pdo->query('SELECT id, title FROM checklist WHERE code IS NULL')->fetchAll(PDO::FETCH_ASSOC);
+        if ($rows === []) {
+            return;
+        }
+
+        $codeByTitle = array_column(self::CHECKLIST_ITEMS, 'code', 'title');
+        $stmt = $pdo->prepare('UPDATE checklist SET code = :code WHERE id = :id');
+
+        foreach ($rows as $row) {
+            $code = $codeByTitle[$row['title']] ?? ('legacy_' . $row['id']);
+            $stmt->execute(['code' => $code, 'id' => $row['id']]);
+        }
+    }
+
+    /**
+     * Записывает канонические пункты по стабильному code (upsert).
+     * Так правки/добавление/удаление пунктов в CHECKLIST_ITEMS применяются к уже существующим
+     * БД без сдвига смысла у уже отмеченных пунктов.
      */
     private static function seedChecklist(PDO $pdo): void
     {
         $stmt = $pdo->prepare(
-            'INSERT INTO checklist (id, title) VALUES (:id, :title)
-             ON CONFLICT (id) DO UPDATE SET title = excluded.title'
+            'INSERT INTO checklist (code, title, sort_order) VALUES (:code, :title, :sort_order)
+             ON CONFLICT (code) DO UPDATE SET title = excluded.title, sort_order = excluded.sort_order'
         );
 
-        foreach (self::CHECKLIST_ITEMS as $index => $title) {
-            $stmt->execute(['id' => $index + 1, 'title' => $title]);
+        foreach (self::CHECKLIST_ITEMS as $sortOrder => $item) {
+            $stmt->execute(['code' => $item['code'], 'title' => $item['title'], 'sort_order' => $sortOrder]);
         }
+    }
+
+    /**
+     * Удаляет пункты, которых больше нет в CHECKLIST_ITEMS (вместе с их отметками в task_checklist).
+     * Так удаление пункта из кода реально убирает его у всех задач, а не оставляет мёртвой строкой.
+     */
+    private static function pruneRemovedItems(PDO $pdo): void
+    {
+        $currentCodes = array_column(self::CHECKLIST_ITEMS, 'code');
+        $placeholders = implode(',', array_fill(0, count($currentCodes), '?'));
+
+        $pdo->prepare(
+            "DELETE FROM task_checklist WHERE checklist_id IN (SELECT id FROM checklist WHERE code NOT IN ($placeholders))"
+        )->execute($currentCodes);
+
+        $pdo->prepare("DELETE FROM checklist WHERE code NOT IN ($placeholders)")->execute($currentCodes);
     }
 }

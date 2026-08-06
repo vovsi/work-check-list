@@ -319,17 +319,19 @@
         renderGitBranch();
     }
 
-    // ==================== Поведение пунктов чек-листа 1-10 ====================
+    // ==================== Поведение пунктов чек-листа ====================
+    // Ключ — стабильный code пункта (см. Database::CHECKLIST_ITEMS), а не порядковый номер:
+    // так добавление/удаление/переупорядочивание пунктов не требует правок здесь.
 
     const ITEM_HANDLERS = {
-        // 1. Story Points указано — отмечается сразу
-        1: (item) => markDone(item.id),
+        // Story Points указано — отмечается сразу
+        story_points: (item) => markDone(item.id),
 
-        // 2. Статус сменен на Doing — отмечается сразу
-        2: (item) => markDone(item.id),
+        // Статус сменен на Doing — отмечается сразу
+        status_doing: (item) => markDone(item.id),
 
-        // 3. Создать ветку в Git — запросить название, скопировать, сохранить в задаче
-        3: async (item) => {
+        // Создать ветку в Git — запросить название, скопировать, сохранить в задаче
+        git_branch: async (item) => {
             const branch = await promptModal('Название ветки', 'например feature/PROJ-123-описание');
             if (!branch) return;
             const copied = await copyText(branch);
@@ -337,19 +339,19 @@
             showToast(copied ? 'Ветка скопирована в буфер обмена' : 'Ветка сохранена');
         },
 
-        // 4. Создать Pull Request — запросить ссылку, сохранить для пункта 10
-        4: async (item) => {
+        // Создать Pull Request — запросить ссылку, сохранить для пункта «Отправить PR в ЛС»
+        pull_request: async (item) => {
             const link = await promptModal('Ссылка на Pull Request', 'https://github.com/...');
             if (!link) return;
             sessionStorage.setItem(prLinkStorageKey(), link);
             await markDone(item.id);
         },
 
-        // 5. Проверить PR через Claude — отмечается сразу
-        5: (item) => markDone(item.id),
+        // Проверить PR через Claude — отмечается сразу
+        claude_review: (item) => markDone(item.id),
 
-        // 6. Заполнить описание PR — показать номер задачи и подсказку, отметить по подтверждению
-        6: async (item) => {
+        // Заполнить описание PR — показать номер задачи и подсказку, отметить по подтверждению
+        pr_description: async (item) => {
             const confirmed = await showModal(
                 'Заполнение описания PR',
                 `<div>Номер задачи:</div>
@@ -373,8 +375,8 @@
             }
         },
 
-        // 7. Оставить коммент в Jira — скопировать шаблон текста
-        7: async (item) => {
+        // Оставить коммент в Jira — скопировать шаблон текста
+        jira_comment: async (item) => {
             const confirmed = await showModal(
                 'Комментарий в Jira',
                 `<div class="snippet">${escapeHtml(JIRA_COMMENT_TEXT)}</div>`,
@@ -390,8 +392,8 @@
             }
         },
 
-        // 8. Оставить описание в Jira — скопировать текст с HTML-разметкой (сохраняет стиль)
-        8: async (item) => {
+        // Оставить описание в Jira — скопировать текст с HTML-разметкой (сохраняет стиль)
+        jira_description: async (item) => {
             const confirmed = await showModal(
                 'Описание в Jira',
                 `<div class="snippet" style="font-family: inherit;">${JIRA_DESCRIPTION_HTML}</div>`,
@@ -407,11 +409,11 @@
             }
         },
 
-        // 9. Затрекать время в Jira — отмечается сразу
-        9: (item) => markDone(item.id),
+        // Затрекать время в Jira — отмечается сразу
+        time_tracking: (item) => markDone(item.id),
 
-        // 10. Отправить PR в ЛС — скопировать ранее сохранённую ссылку на PR
-        10: async (item) => {
+        // Отправить PR в ЛС — скопировать ранее сохранённую ссылку на PR
+        send_pr: async (item) => {
             const link = sessionStorage.getItem(prLinkStorageKey());
             if (link) {
                 await copyText(link);
@@ -427,7 +429,7 @@
         if (item.is_done) {
             return;
         }
-        const handler = ITEM_HANDLERS[item.id];
+        const handler = ITEM_HANDLERS[item.code];
         if (handler) {
             handler(item);
         }

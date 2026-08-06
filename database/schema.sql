@@ -10,7 +10,12 @@ CREATE TABLE IF NOT EXISTS tasks (
 
 CREATE TABLE IF NOT EXISTS checklist (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL
+    -- code — стабильный идентификатор смысла пункта (используется в бизнес-логике и на фронте).
+    -- id и sort_order можно менять/переставлять, code — никогда: на нём держится привязка
+    -- уже проставленных галочек в task_checklist к правильному пункту.
+    code TEXT NOT NULL,
+    title TEXT NOT NULL,
+    sort_order INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS task_checklist (
