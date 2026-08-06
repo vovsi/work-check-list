@@ -20,7 +20,7 @@ docker compose up -d --build
 
 Open in browser: http://localhost:8000/public/index.php
 
-The DB file is persisted on the host at `storage/app.sqlite` (mounted as a volume — not lost on rebuild).
+The whole project is mounted into the container as a volume, so code changes on the host are picked up immediately — after editing a file, just run `docker compose restart` (no rebuild needed). A rebuild (`docker compose up -d --build`) is only required after changing the `Dockerfile` itself (e.g. adding a PHP extension).
 
 Stop: `docker compose down`
 

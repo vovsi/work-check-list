@@ -83,9 +83,6 @@ body {
 }
 
 .popover {
-    position: fixed;
-    top: 50px;
-    right: 14px;
     background: var(--surface);
     backdrop-filter: blur(24px) saturate(180%);
     -webkit-backdrop-filter: blur(24px) saturate(180%);
@@ -99,7 +96,23 @@ body {
     min-width: 130px;
 }
 
-.theme-option {
+.popover--theme {
+    position: fixed;
+    top: 50px;
+    right: 14px;
+}
+
+/* Дропдаун git-команд открывается вверх от иконки в футере */
+.popover--git {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 190px;
+}
+
+.theme-option,
+.git-action-option {
     border: none;
     background: transparent;
     color: var(--text-primary);
@@ -108,9 +121,12 @@ body {
     border-radius: 8px;
     font-size: 13px;
     cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
 }
 
-.theme-option:hover {
+.theme-option:hover,
+.git-action-option:hover {
     background: var(--accent-soft);
 }
 
@@ -335,7 +351,33 @@ body {
 .git-branch-footer {
     min-height: 22px;
     display: flex;
+    align-items: center;
     justify-content: center;
+    gap: 4px;
+}
+
+.git-icon-wrap {
+    position: relative;
+    display: inline-flex;
+}
+
+.git-icon-btn {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: none;
+    color: var(--text-tertiary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.12s ease, color 0.12s ease;
+}
+
+.git-icon-btn:hover {
+    background: rgba(127, 127, 127, 0.12);
+    color: var(--text-secondary);
 }
 
 .branch-pill {

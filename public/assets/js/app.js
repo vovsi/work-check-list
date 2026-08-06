@@ -28,6 +28,8 @@
     const checklistEl = document.getElementById('checklist');
     const finishTaskBtn = document.getElementById('finish-task-btn');
     const gitBranchValue = document.getElementById('git-branch-value');
+    const gitActionsBtn = document.getElementById('git-actions-btn');
+    const gitActionsPopover = document.getElementById('git-actions-popover');
     const settingsBtn = document.getElementById('settings-btn');
     const themePopover = document.getElementById('theme-popover');
     const toastEl = document.getElementById('toast');
@@ -196,11 +198,17 @@
         applyTheme(prefersDark ? 'dark' : 'light');
     }
 
+    function closePopovers() {
+        themePopover.classList.add('hidden');
+        gitActionsPopover.classList.add('hidden');
+    }
+
     settingsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
+        closePopovers();
         themePopover.classList.toggle('hidden');
     });
-    document.addEventListener('click', () => themePopover.classList.add('hidden'));
+    document.addEventListener('click', closePopovers);
     themePopover.addEventListener('click', (e) => e.stopPropagation());
     themePopover.querySelectorAll('.theme-option').forEach((btn) => {
         btn.addEventListener('click', () => {
@@ -209,10 +217,40 @@
         });
     });
 
+    // ==================== Дропдаун git-команд у названия ветки ====================
+
+    /** Команды git по каждому пункту дропдауна (branch — текущая ветка задачи) */
+    const GIT_ACTION_COMMANDS = {
+        'create-branch': (branch) => `git checkout -b ${branch}`,
+        push: (branch) => `git push origin ${branch}`,
+        'rebase-api3': () => 'git rebase origin/main',
+        'rebase-adminka': () => 'git rebase origin/dev',
+    };
+
+    gitActionsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasHidden = gitActionsPopover.classList.contains('hidden');
+        closePopovers();
+        if (wasHidden) {
+            gitActionsPopover.classList.remove('hidden');
+        }
+    });
+    gitActionsPopover.addEventListener('click', (e) => e.stopPropagation());
+    gitActionsPopover.querySelectorAll('.git-action-option').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const command = GIT_ACTION_COMMANDS[btn.dataset.action](state.task.git_branch);
+            await copyText(command);
+            showToast(`Скопировано: ${command}`);
+            gitActionsPopover.classList.add('hidden');
+        });
+    });
+
     // ==================== Рендер экрана задачи ====================
 
     function renderGitBranch() {
-        if (state.task.git_branch) {
+        const hasBranch = Boolean(state.task.git_branch);
+        gitActionsBtn.classList.toggle('hidden', !hasBranch);
+        if (hasBranch) {
             gitBranchValue.textContent = state.task.git_branch;
             gitBranchValue.classList.remove('hidden');
         } else {

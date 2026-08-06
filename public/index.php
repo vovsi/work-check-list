@@ -17,7 +17,7 @@
 </button>
 
 <!-- Попап выбора темы -->
-<div id="theme-popover" class="popover hidden">
+<div id="theme-popover" class="popover popover--theme hidden">
     <button class="theme-option" data-theme="light">Светлая</button>
     <button class="theme-option" data-theme="dark">Тёмная</button>
 </div>
@@ -52,6 +52,23 @@
 
         <div class="git-branch-footer" id="git-branch-footer">
             <button id="git-branch-value" class="branch-pill hidden" title="Скопировать ветку"></button>
+            <div class="git-icon-wrap">
+                <button id="git-actions-btn" class="git-icon-btn hidden" title="Git команды" aria-label="Git команды">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="6" cy="6" r="2.2"/>
+                        <circle cx="6" cy="18" r="2.2"/>
+                        <circle cx="18" cy="6" r="2.2"/>
+                        <path d="M6 8.2V15.8"/>
+                        <path d="M8.2 6H14a4 4 0 0 1 4 4v0"/>
+                    </svg>
+                </button>
+                <div id="git-actions-popover" class="popover popover--git hidden">
+                    <button class="git-action-option" data-action="create-branch">Create Branch</button>
+                    <button class="git-action-option" data-action="push">Push</button>
+                    <button class="git-action-option" data-action="rebase-api3">Rebase API3</button>
+                    <button class="git-action-option" data-action="rebase-adminka">Rebase Adminka</button>
+                </div>
+            </div>
         </div>
     </section>
 
