@@ -49,6 +49,72 @@
         'stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.2"/>' +
         '<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
 
+    // ==================== Иконки сервисов (справа у каждого пункта чек-листа) ====================
+
+    /** Разметка и брендовый цвет иконки по сервису. Цвет одновременно — источник лёгкой подсветки строки */
+    const SERVICE_META = {
+        jira: {
+            color: '#0052CC',
+            svg:
+                '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M11.571 11.513H0a5.218 5.218 0 0 0 ' +
+                '5.232 5.215h2.13v2.057A5.215 5.215 0 0 0 12.575 24V12.518a1.005 1.005 0 0 0-1.004-1.005zm5.723' +
+                '-5.756H5.736a5.215 5.215 0 0 0 5.215 5.215h2.129v2.058a5.218 5.218 0 0 0 5.215 5.214V6.758a1.001' +
+                ' 1.001 0 0 0-1.001-1.001zM23.013 0H11.455a5.215 5.215 0 0 0 5.215 5.215h2.129v2.129A5.215 5.215' +
+                ' 0 0 0 24 12.559V1.001A1.001 1.001 0 0 0 23.013 0z"/></svg>',
+        },
+        git: {
+            color: '#F05032',
+            svg:
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+                'stroke-linejoin="round"><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/>' +
+                '<circle cx="18" cy="6" r="2.4"/><path d="M6 8.4V15.6"/><path d="M8.4 6H14a4 4 0 0 1 4 4v0"/></svg>',
+        },
+        github: {
+            color: '#8957E5',
+            svg:
+                '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 ' +
+                '5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82' +
+                '-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51' +
+                '-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2' +
+                '.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12' +
+                '.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 ' +
+                '.21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>',
+        },
+        claude: {
+            color: '#D97757',
+            svg:
+                '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.4 3.6 1.2 6.1 2.4 7.4 1.3 1.3 3.8 ' +
+                '2.1 7.4 2.4-3.6.4-6.1 1.2-7.4 2.4-1.3 1.3-2.1 3.8-2.4 7.4-.4-3.6-1.2-6.1-2.4-7.4C8.3 12.9 5.8 ' +
+                '12.1 2.2 11.8 5.8 11.4 8.3 10.6 9.6 9.4 10.9 8.1 11.7 5.6 12 2z"/></svg>',
+        },
+        telegram: {
+            color: '#26A5E4',
+            svg:
+                '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 ' +
+                '12 12-5.373 12-12S18.627 0 12 0zm5.568 8.16c-.169 1.858-.896 6.728-1.266 8.9-.156.918-.472 ' +
+                '1.226-.804 1.257-.696.06-1.226-.406-1.899-.807-1.056-.63-1.653-1.02-2.673-1.632-1.184-.708-.417' +
+                '-1.098.259-1.734.176-.168 3.239-2.964 3.298-3.216.007-.031.014-.147-.056-.208-.07-.061-.174-.04' +
+                '-.249-.024-.106.023-1.793 1.146-5.062 3.369-.478.328-.913.489-1.301.481-.428-.009-1.252-.242' +
+                '-1.865-.442-.751-.244-1.349-.373-1.297-.787.027-.216.325-.437.893-.663 3.498-1.524 5.831-2.529 ' +
+                '6.998-3.014 3.332-1.386 4.023-1.627 4.476-1.635.099-.002.321.023.465.14.121.098.153.23.171.322' +
+                '.017.09.038.297.021.458z"/></svg>',
+        },
+    };
+
+    /** Какой сервис относится к каждому пункту чек-листа (код → ключ SERVICE_META) */
+    const ITEM_SERVICE = {
+        story_points: 'jira',
+        status_doing: 'jira',
+        git_branch: 'git',
+        pull_request: 'github',
+        claude_review: 'claude',
+        pr_description: 'github',
+        jira_comment: 'jira',
+        jira_description: 'jira',
+        time_tracking: 'jira',
+        send_pr: 'telegram',
+    };
+
     /** Ключ localStorage — под ним хранится ссылка последней открытой задачи */
     const TASK_LINK_STORAGE_KEY = 'wcl_task_link';
 
@@ -299,12 +365,18 @@
         }
 
         pending.forEach((item) => {
+            const service = SERVICE_META[ITEM_SERVICE[item.code]];
+
             const li = document.createElement('li');
             li.className = 'checklist-item';
             li.dataset.checklistId = String(item.id);
+            if (service) {
+                li.style.setProperty('--service-color', service.color);
+            }
             li.innerHTML =
                 `<span class="checkbox">${CHECK_SVG}</span>` +
-                `<span class="item-title">${escapeHtml(item.title)}</span>`;
+                `<span class="item-title">${escapeHtml(item.title)}</span>` +
+                (service ? `<span class="service-icon" style="color: ${service.color}">${service.svg}</span>` : '');
             li.addEventListener('click', () => {
                 if (li.classList.contains('locked')) return;
                 handleItemClick(item);

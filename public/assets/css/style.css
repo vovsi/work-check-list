@@ -293,8 +293,10 @@ body {
     border-radius: 12px;
     cursor: pointer;
     overflow: hidden;
+    /* Лёгкая подсветка строки в тон сервиса (--service-color задаётся инлайново из JS) */
+    background: color-mix(in srgb, var(--service-color, transparent) 12%, transparent);
     transition:
-        background 0.12s ease,
+        filter 0.12s ease,
         max-height 0.32s ease,
         opacity 0.32s ease,
         transform 0.32s ease,
@@ -304,11 +306,29 @@ body {
 }
 
 .checklist-item:hover {
-    background: rgba(127, 127, 127, 0.08);
+    filter: brightness(0.94);
+}
+
+html[data-theme="dark"] .checklist-item:hover {
+    filter: brightness(1.22);
 }
 
 .checklist-item:not(:last-child) {
     border-bottom: 1px solid var(--divider);
+}
+
+.service-icon {
+    margin-left: auto;
+    flex: none;
+    width: 15px;
+    height: 15px;
+    display: flex;
+    opacity: 0.9;
+}
+
+.service-icon svg {
+    width: 100%;
+    height: 100%;
 }
 
 /* Пункт улетает из списка после отметки выполнения (max-height задаётся инлайново из JS) */
@@ -325,7 +345,7 @@ body {
 }
 
 .checklist-item.locked:hover {
-    background: transparent;
+    filter: none;
 }
 
 .checklist-item.locked .checkbox {
