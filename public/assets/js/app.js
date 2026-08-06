@@ -268,11 +268,21 @@
         }
     }
 
+    /** Рендерит чек-лист. Выполненные пункты в списке не показываются — они уже улетели по анимации */
     function renderChecklist() {
         checklistEl.innerHTML = '';
-        state.checklist.forEach((item) => {
+        const pending = state.checklist.filter((item) => !item.is_done);
+
+        if (pending.length === 0) {
+            checklistEl.innerHTML = '<li class="checklist-empty">Все пункты выполнены</li>';
+            renderProgress();
+            return;
+        }
+
+        pending.forEach((item) => {
             const li = document.createElement('li');
-            li.className = 'checklist-item' + (item.is_done ? ' done' : '');
+            li.className = 'checklist-item';
+            li.dataset.checklistId = String(item.id);
             li.innerHTML =
                 `<span class="checkbox">${CHECK_SVG}</span>` +
                 `<span class="item-title">${escapeHtml(item.title)}</span>`;
@@ -280,6 +290,43 @@
             checklistEl.appendChild(li);
         });
         renderProgress();
+    }
+
+    /**
+     * Анимация выполнения пункта: сначала проставляется галочка, затем, с небольшой
+     * паузой, пункт плавно сворачивается и выезжает из списка, после чего удаляется из DOM.
+     */
+    function animateItemCompletion(checklistId) {
+        const li = checklistEl.querySelector(`li[data-checklist-id="${checklistId}"]`);
+        if (!li) {
+            renderChecklist();
+            return;
+        }
+
+        li.classList.add('done');
+
+        setTimeout(() => {
+            const height = li.getBoundingClientRect().height;
+            li.style.maxHeight = `${height}px`;
+
+            requestAnimationFrame(() => {
+                li.classList.add('leaving');
+                li.style.maxHeight = '0px';
+                li.style.paddingTop = '0px';
+                li.style.paddingBottom = '0px';
+                li.style.marginTop = '0px';
+                li.style.marginBottom = '0px';
+            });
+
+            const removeAndCheckEmpty = () => {
+                li.remove();
+                if (!checklistEl.querySelector('.checklist-item')) {
+                    renderChecklist();
+                }
+            };
+            li.addEventListener('transitionend', removeAndCheckEmpty, { once: true });
+            setTimeout(removeAndCheckEmpty, 500); // страховка, если transitionend не сработает
+        }, 550);
     }
 
     /** Отображает долю выполненных пунктов чек-листа зелёным прогресс-баром */
@@ -339,8 +386,9 @@
         if (data.task) {
             state.task = data.task;
         }
-        renderChecklist();
+        renderProgress();
         renderGitBranch();
+        animateItemCompletion(checklistId);
     }
 
     // ==================== Поведение пунктов чек-листа ====================
