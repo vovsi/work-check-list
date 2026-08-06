@@ -42,6 +42,9 @@
         '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" ' +
         'stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
 
+    /** Ключ localStorage — под ним хранится ссылка последней открытой задачи */
+    const TASK_LINK_STORAGE_KEY = 'wcl_task_link';
+
     /** Состояние текущей задачи и чек-листа */
     const state = {
         task: null,
@@ -283,6 +286,7 @@
     function showLinkScreen() {
         state.task = null;
         state.checklist = [];
+        localStorage.removeItem(TASK_LINK_STORAGE_KEY);
         taskScreen.classList.add('hidden');
         linkScreen.classList.remove('hidden');
         taskLinkInput.value = '';
@@ -296,8 +300,10 @@
             const data = await apiCall('../api/task.php', { link });
             state.task = data.task;
             state.checklist = data.checklist;
+            localStorage.setItem(TASK_LINK_STORAGE_KEY, link);
             showTaskScreen();
         } catch (e) {
+            linkScreen.classList.remove('hidden');
             linkError.textContent = e.message;
             linkError.classList.remove('hidden');
         }
@@ -462,5 +468,12 @@
     // ==================== Инициализация ====================
 
     initTheme();
-    showLinkScreen();
+
+    const savedLink = localStorage.getItem(TASK_LINK_STORAGE_KEY);
+    if (savedLink) {
+        linkScreen.classList.add('hidden'); // прячем экран ввода на время подгрузки сохранённой задачи
+        loadTask(savedLink);
+    } else {
+        showLinkScreen();
+    }
 })();
