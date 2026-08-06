@@ -1,34 +1,34 @@
 # work-check-list
 
-Одностраничное приложение-чек-лист для работы с задачами Jira. PHP 8.3 + SQLite, без фреймворков.
+Single-page checklist app for working with Jira tasks. PHP 8.3 + SQLite, no frameworks.
 
-## Запуск локально (PHP)
+## Run locally (PHP)
 
 ```bash
 php -S localhost:8000
 ```
 
-Открыть в браузере: http://localhost:8000/public/index.php
+Open in browser: http://localhost:8000/public/index.php
 
-Рекомендуется открывать в отдельном маленьком окне Chrome (Create Shortcut / App mode).
+It's recommended to open it in a small standalone Chrome window (Create Shortcut / App mode).
 
-## Запуск через Docker
+## Run with Docker
 
 ```bash
 docker compose up -d --build
 ```
 
-Открыть в браузере: http://localhost:8000/public/index.php
+Open in browser: http://localhost:8000/public/index.php
 
-Файл БД сохраняется на хосте в `storage/app.sqlite` (смонтирован как volume — не теряется при пересборке).
+The DB file is persisted on the host at `storage/app.sqlite` (mounted as a volume — not lost on rebuild).
 
-Остановить: `docker compose down`
+Stop: `docker compose down`
 
-## Структура
+## Structure
 
-- `database/schema.sql` — схема SQLite (tasks, checklist, task_checklist)
-- `storage/app.sqlite` — файл БД, создаётся автоматически при первом запуске
-- `src/` — классы (Database, TaskRepository, ChecklistRepository, TaskService)
-- `api/` — JSON-эндпоинты (task.php, toggle.php, finish.php)
-- `public/` — фронтенд (index.php, assets/css, assets/js)
-- `Dockerfile`, `docker-compose.yml` — запуск в контейнере (PHP 8.3 + pdo_sqlite)
+- `database/schema.sql` — SQLite schema (tasks, checklist, task_checklist)
+- `storage/app.sqlite` — DB file, created automatically on first run
+- `src/` — classes (Database, TaskRepository, ChecklistRepository, TaskService)
+- `api/` — JSON endpoints (task.php, toggle.php, finish.php)
+- `public/` — frontend (index.php, assets/css, assets/js)
+- `Dockerfile`, `docker-compose.yml` — containerized run (PHP 8.3 + pdo_sqlite)
