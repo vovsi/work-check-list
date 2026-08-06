@@ -318,6 +318,20 @@ body {
     border-bottom-color: transparent;
 }
 
+/* Работаем по очереди: активен только первый пункт, остальные заблокированы до его выполнения */
+.checklist-item.locked {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.checklist-item.locked:hover {
+    background: transparent;
+}
+
+.checklist-item.locked .checkbox {
+    border-color: var(--divider);
+}
+
 .checklist-empty {
     display: flex;
     flex-direction: column;

@@ -279,7 +279,11 @@
         }
     }
 
-    /** Рендерит чек-лист. Выполненные пункты в списке не показываются — они уже улетели по анимации */
+    /**
+     * Рендерит чек-лист. Выполненные пункты в списке не показываются — они уже улетели по
+     * анимации. Работаем строго по очереди: активен и доступен для клика только первый
+     * невыполненный пункт, остальные заблокированы (updateLockState расставляет классы).
+     */
     function renderChecklist() {
         checklistEl.innerHTML = '';
         const pending = state.checklist.filter((item) => !item.is_done);
@@ -301,10 +305,21 @@
             li.innerHTML =
                 `<span class="checkbox">${CHECK_SVG}</span>` +
                 `<span class="item-title">${escapeHtml(item.title)}</span>`;
-            li.addEventListener('click', () => handleItemClick(item));
+            li.addEventListener('click', () => {
+                if (li.classList.contains('locked')) return;
+                handleItemClick(item);
+            });
             checklistEl.appendChild(li);
         });
+        updateLockState();
         renderProgress();
+    }
+
+    /** Только первый оставшийся пункт активен, все следующие — заблокированы */
+    function updateLockState() {
+        checklistEl.querySelectorAll('.checklist-item').forEach((li, index) => {
+            li.classList.toggle('locked', index !== 0);
+        });
     }
 
     /**
@@ -337,6 +352,8 @@
                 li.remove();
                 if (!checklistEl.querySelector('.checklist-item')) {
                     renderChecklist();
+                } else {
+                    updateLockState(); // следующий по очереди пункт становится активным
                 }
             };
             li.addEventListener('transitionend', removeAndCheckEmpty, { once: true });
