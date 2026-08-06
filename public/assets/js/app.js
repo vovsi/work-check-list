@@ -44,6 +44,11 @@
         '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" ' +
         'stroke-linecap="round" stroke-linejoin="round"><path d="M5 13l4 4L19 7"/></svg>';
 
+    const COPY_SVG =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+        'stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.2"/>' +
+        '<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
+
     /** Ключ localStorage — под ним хранится ссылка последней открытой задачи */
     const TASK_LINK_STORAGE_KEY = 'wcl_task_link';
 
@@ -122,12 +127,18 @@
      * Показывает модальное окно и возвращает Promise, который разрешается значением
      * нажатой кнопки. Кнопки с keepOpen выполняют действие, не закрывая окно
      * (используется для кнопки «Скопировать» рядом с подтверждением).
+     * onRender(bodyEl) вызывается сразу после вставки bodyHtml — там можно навесить
+     * свои обработчики на интерактивные элементы внутри тела модалки.
      */
-    function showModal(title, bodyHtml, buttons) {
+    function showModal(title, bodyHtml, buttons, onRender) {
         return new Promise((resolve) => {
             modalTitleEl.textContent = title;
             modalBodyEl.innerHTML = bodyHtml;
             modalActionsEl.innerHTML = '';
+
+            if (typeof onRender === 'function') {
+                onRender(modalBodyEl);
+            }
 
             function cleanup() {
                 modalOverlay.classList.add('hidden');
@@ -426,25 +437,35 @@
         // Проверить PR через Claude — отмечается сразу
         claude_review: (item) => markDone(item.id),
 
-        // Заполнить описание PR — показать номер задачи и подсказку, отметить по подтверждению
+        // Заполнить описание PR — чек-лист из 3 шагов, отметить по подтверждению
         pr_description: async (item) => {
             const confirmed = await showModal(
                 'Заполнение описания PR',
-                `<div>Номер задачи:</div>
-                 <div class="snippet">${escapeHtml(state.task.task_id)}</div>
-                 <div class="hint">Укажите техлида, ревьювера и заасайните на себя ПР</div>`,
+                `<div class="pr-steps">
+                     <div class="pr-step pr-step--action" id="pr-copy-link-step">
+                         <span class="pr-step-num">1</span>
+                         <span class="pr-step-text">Скопировать ссылку на задачу</span>
+                         <span class="pr-step-icon">${COPY_SVG}</span>
+                     </div>
+                     <div class="pr-step">
+                         <span class="pr-step-num">2</span>
+                         <span class="pr-step-text">Заасайните PR на себя</span>
+                     </div>
+                     <div class="pr-step">
+                         <span class="pr-step-num">3</span>
+                         <span class="pr-step-text">Укажите в PR своего техлида и ревьювера</span>
+                     </div>
+                 </div>`,
                 [
-                    {
-                        label: 'Скопировать номер',
-                        keepOpen: true,
-                        onClick: async () => {
-                            await copyText(state.task.task_id);
-                            notifyCopied(`номер задачи «${state.task.task_id}»`);
-                        },
-                    },
                     { label: 'Отмена', value: false },
-                    { label: 'Подтвердить', primary: true, value: true },
-                ]
+                    { label: 'Готово', primary: true, value: true },
+                ],
+                (bodyEl) => {
+                    bodyEl.querySelector('#pr-copy-link-step').addEventListener('click', async () => {
+                        await copyText(state.task.task_link);
+                        notifyCopied(`ссылка на задачу «${state.task.task_link}»`);
+                    });
+                }
             );
             if (confirmed) {
                 await markDone(item.id);

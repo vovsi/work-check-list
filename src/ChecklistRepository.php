@@ -26,6 +26,9 @@ final class ChecklistRepository
         'send_pr',
     ];
 
+    /** Код пункта «Создать ветку в Git» — считается выполненным, если у задачи уже есть git_branch */
+    private const GIT_BRANCH_CODE = 'git_branch';
+
     public function __construct(private readonly PDO $db)
     {
     }
@@ -49,17 +52,24 @@ final class ChecklistRepository
 
     /**
      * Возвращает пункты чек-листа с отметкой выполнения для конкретной задачи.
+     * Пункт «Создать ветку в Git» считается выполненным, если у задачи уже сохранена
+     * git_branch — независимо от is_done (например, если ветка была задана раньше).
      */
     public function getStatusesForTask(int $taskId): array
     {
         $stmt = $this->db->prepare(
-            'SELECT c.id, c.code, c.title, tc.is_done
+            'SELECT c.id, c.code, c.title,
+                    CASE
+                        WHEN c.code = :git_branch_code AND t.git_branch IS NOT NULL THEN 1
+                        ELSE tc.is_done
+                    END AS is_done
              FROM checklist c
              JOIN task_checklist tc ON tc.checklist_id = c.id
+             JOIN tasks t ON t.id = tc.task_id
              WHERE tc.task_id = :task_id
              ORDER BY c.sort_order'
         );
-        $stmt->execute(['task_id' => $taskId]);
+        $stmt->execute(['task_id' => $taskId, 'git_branch_code' => self::GIT_BRANCH_CODE]);
 
         return array_map(
             static fn (array $row): array => [

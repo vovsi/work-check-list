@@ -513,9 +513,78 @@ body {
     font-size: 12px;
 }
 
+/* Чек-лист из шагов внутри модалки (пункт «Заполнить описание PR») */
+.pr-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.pr-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 10px;
+}
+
+.pr-step-num {
+    flex: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(127, 127, 127, 0.16);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pr-step-text {
+    font-size: 13px;
+    line-height: 1.4;
+    color: var(--text-primary);
+}
+
+.pr-step--action {
+    cursor: pointer;
+    background: rgba(127, 127, 127, 0.07);
+    transition: background 0.12s ease;
+}
+
+.pr-step--action:hover {
+    background: var(--accent-soft);
+}
+
+.pr-step--action .pr-step-num {
+    background: var(--accent);
+    color: #fff;
+}
+
+.pr-step--action .pr-step-text {
+    font-weight: 550;
+}
+
+.pr-step-icon {
+    margin-left: auto;
+    flex: none;
+    width: 15px;
+    height: 15px;
+    color: var(--text-tertiary);
+    display: flex;
+}
+
+.pr-step-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
 .modal-actions {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
