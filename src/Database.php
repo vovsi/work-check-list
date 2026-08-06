@@ -17,6 +17,7 @@ final class Database
     /** Пункты чек-листа в порядке отображения (индекс + 1 = id в таблице checklist) */
     private const CHECKLIST_ITEMS = [
         'Story Points указано',
+        'Статус сменен на Doing',
         'Создать ветку в Git',
         'PR создан',
         'PR проверен Claude',

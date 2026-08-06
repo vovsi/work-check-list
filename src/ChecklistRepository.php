@@ -11,8 +11,8 @@ use PDO;
  */
 final class ChecklistRepository
 {
-    /** Пункты 3-9 обнуляются, если задача уже существовала в БД */
-    private const RESETABLE_ON_REOPEN = [3, 4, 5, 6, 7, 8, 9];
+    /** Пункты 4-10 обнуляются, если задача уже существовала в БД */
+    private const RESETABLE_ON_REOPEN = [4, 5, 6, 7, 8, 9, 10];
 
     public function __construct(private readonly PDO $db)
     {

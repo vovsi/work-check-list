@@ -319,14 +319,17 @@
         renderGitBranch();
     }
 
-    // ==================== Поведение пунктов чек-листа 1-9 ====================
+    // ==================== Поведение пунктов чек-листа 1-10 ====================
 
     const ITEM_HANDLERS = {
-        // 1. Указать Story Points — отмечается сразу
+        // 1. Story Points указано — отмечается сразу
         1: (item) => markDone(item.id),
 
-        // 2. Создать ветку в Git — запросить название, скопировать, сохранить в задаче
-        2: async (item) => {
+        // 2. Статус сменен на Doing — отмечается сразу
+        2: (item) => markDone(item.id),
+
+        // 3. Создать ветку в Git — запросить название, скопировать, сохранить в задаче
+        3: async (item) => {
             const branch = await promptModal('Название ветки', 'например feature/PROJ-123-описание');
             if (!branch) return;
             const copied = await copyText(branch);
@@ -334,19 +337,19 @@
             showToast(copied ? 'Ветка скопирована в буфер обмена' : 'Ветка сохранена');
         },
 
-        // 3. Создать Pull Request — запросить ссылку, сохранить для пункта 9
-        3: async (item) => {
+        // 4. Создать Pull Request — запросить ссылку, сохранить для пункта 10
+        4: async (item) => {
             const link = await promptModal('Ссылка на Pull Request', 'https://github.com/...');
             if (!link) return;
             sessionStorage.setItem(prLinkStorageKey(), link);
             await markDone(item.id);
         },
 
-        // 4. Проверить PR через Claude — отмечается сразу
-        4: (item) => markDone(item.id),
+        // 5. Проверить PR через Claude — отмечается сразу
+        5: (item) => markDone(item.id),
 
-        // 5. Заполнить описание PR — показать номер задачи и подсказку, отметить по подтверждению
-        5: async (item) => {
+        // 6. Заполнить описание PR — показать номер задачи и подсказку, отметить по подтверждению
+        6: async (item) => {
             const confirmed = await showModal(
                 'Заполнение описания PR',
                 `<div>Номер задачи:</div>
@@ -370,8 +373,8 @@
             }
         },
 
-        // 6. Оставить коммент в Jira — скопировать шаблон текста
-        6: async (item) => {
+        // 7. Оставить коммент в Jira — скопировать шаблон текста
+        7: async (item) => {
             const confirmed = await showModal(
                 'Комментарий в Jira',
                 `<div class="snippet">${escapeHtml(JIRA_COMMENT_TEXT)}</div>`,
@@ -387,8 +390,8 @@
             }
         },
 
-        // 7. Оставить описание в Jira — скопировать текст с HTML-разметкой (сохраняет стиль)
-        7: async (item) => {
+        // 8. Оставить описание в Jira — скопировать текст с HTML-разметкой (сохраняет стиль)
+        8: async (item) => {
             const confirmed = await showModal(
                 'Описание в Jira',
                 `<div class="snippet" style="font-family: inherit;">${JIRA_DESCRIPTION_HTML}</div>`,
@@ -404,11 +407,11 @@
             }
         },
 
-        // 8. Затрекать время в Jira — отмечается сразу
-        8: (item) => markDone(item.id),
+        // 9. Затрекать время в Jira — отмечается сразу
+        9: (item) => markDone(item.id),
 
-        // 9. Отправить PR в ЛС — скопировать ранее сохранённую ссылку на PR
-        9: async (item) => {
+        // 10. Отправить PR в ЛС — скопировать ранее сохранённую ссылку на PR
+        10: async (item) => {
             const link = sessionStorage.getItem(prLinkStorageKey());
             if (link) {
                 await copyText(link);
