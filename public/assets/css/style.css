@@ -500,23 +500,25 @@ body {
 
 .toast {
     position: fixed;
-    bottom: 22px;
+    top: 16px;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translateX(-50%) translateY(-14px);
     background: var(--surface-solid);
     color: var(--text-primary);
     border: 1px solid var(--surface-border);
     box-shadow: var(--shadow);
-    padding: 9px 16px;
+    padding: 9px 18px;
     border-radius: 12px;
     font-size: 12.5px;
+    text-align: center;
+    max-width: min(90%, 460px);
     z-index: 60;
     opacity: 0;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    transition: opacity 0.25s ease, transform 0.25s ease;
     pointer-events: none;
 }
 
 .toast.visible {
     opacity: 1;
-    transform: translateX(-50%) translateY(-4px);
+    transform: translateX(-50%) translateY(0);
 }

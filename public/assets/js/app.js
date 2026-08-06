@@ -71,7 +71,12 @@
         toastEl.textContent = message;
         toastEl.classList.add('visible');
         clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => toastEl.classList.remove('visible'), 1800);
+        toastTimer = setTimeout(() => toastEl.classList.remove('visible'), 2200);
+    }
+
+    /** Уведомление о том, что именно скопировано в буфер обмена (единый формат для всех копирований) */
+    function notifyCopied(description) {
+        showToast(`Скопировано: ${description}`);
     }
 
     /** Копирует обычный текст в буфер обмена */
@@ -245,7 +250,7 @@
         btn.addEventListener('click', async () => {
             const command = GIT_ACTION_COMMANDS[btn.dataset.action](state.task.git_branch);
             await copyText(command);
-            showToast(`Скопировано: ${command}`);
+            notifyCopied(command);
             gitActionsPopover.classList.add('hidden');
         });
     });
@@ -355,7 +360,11 @@
             if (!branch) return;
             const copied = await copyText(branch);
             await markDone(item.id, { branch });
-            showToast(copied ? 'Ветка скопирована в буфер обмена' : 'Ветка сохранена');
+            if (copied) {
+                notifyCopied(`название ветки «${branch}»`);
+            } else {
+                showToast('Ветка сохранена, но не скопирована');
+            }
         },
 
         // Создать Pull Request — запросить ссылку, сохранить для пункта «Отправить PR в ЛС»
@@ -382,7 +391,7 @@
                         keepOpen: true,
                         onClick: async () => {
                             await copyText(state.task.task_id);
-                            showToast('Номер задачи скопирован');
+                            notifyCopied(`номер задачи «${state.task.task_id}»`);
                         },
                     },
                     { label: 'Отмена', value: false },
@@ -407,7 +416,7 @@
             if (confirmed) {
                 await copyText(JIRA_COMMENT_TEXT);
                 await markDone(item.id);
-                showToast('Текст скопирован в буфер обмена');
+                notifyCopied('комментарий для Jira');
             }
         },
 
@@ -424,7 +433,7 @@
             if (confirmed) {
                 await copyRichText(JIRA_DESCRIPTION_HTML, JIRA_DESCRIPTION_PLAIN);
                 await markDone(item.id);
-                showToast('Текст скопирован (со стилем)');
+                notifyCopied('описание для Jira (с форматированием)');
             }
         },
 
@@ -436,7 +445,7 @@
             const link = sessionStorage.getItem(prLinkStorageKey());
             if (link) {
                 await copyText(link);
-                showToast('Ссылка на PR скопирована');
+                notifyCopied(`ссылка на PR «${link}»`);
             } else {
                 showToast('Ссылка на PR не найдена — скопируйте вручную');
             }
@@ -475,7 +484,11 @@
 
     gitBranchValue.addEventListener('click', async () => {
         const copied = await copyText(state.task.git_branch);
-        showToast(copied ? 'Ветка скопирована' : 'Не удалось скопировать');
+        if (copied) {
+            notifyCopied(`название ветки «${state.task.git_branch}»`);
+        } else {
+            showToast('Не удалось скопировать');
+        }
     });
 
     // ==================== Инициализация ====================

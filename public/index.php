@@ -1,10 +1,28 @@
+<?php
+// Страница активно меняется в разработке — запрещаем браузеру кешировать сам HTML,
+// чтобы правки разметки не терялись за старой закешированной версией страницы.
+header('Cache-Control: no-cache, no-store, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
+
+// Версия статики = время последнего изменения файла: при каждой правке CSS/JS
+// у ссылки меняется ?v=..., и браузер больше не подставляет закешированную версию.
+$assetVersion = static function (string $relativePath): string {
+    $path = __DIR__ . '/' . $relativePath;
+    // Встроенный сервер PHP держит один процесс на все запросы, поэтому без сброса
+    // stat-кеша filemtime() продолжал бы отдавать время первого запроса.
+    clearstatcache(true, $path);
+
+    return (string) filemtime($path);
+};
+?>
 <!doctype html>
 <html lang="ru" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>Work Check List</title>
-    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?= $assetVersion('assets/css/style.css') ?>">
 </head>
 <body>
 
@@ -92,8 +110,8 @@
 </div>
 
 <!-- Всплывающее уведомление (например «Скопировано») -->
-<div id="toast" class="toast hidden"></div>
+<div id="toast" class="toast"></div>
 
-<script src="assets/js/app.js"></script>
+<script src="assets/js/app.js?v=<?= $assetVersion('assets/js/app.js') ?>"></script>
 </body>
 </html>
