@@ -314,7 +314,7 @@ html[data-theme="dark"] .checklist-item:hover {
 }
 
 .checklist-item:not(:last-child) {
-    border-bottom: 1px solid var(--divider);
+    margin-bottom: 6px;
 }
 
 .service-icon {
@@ -335,7 +335,6 @@ html[data-theme="dark"] .checklist-item:hover {
 .checklist-item.leaving {
     opacity: 0;
     transform: translateX(36px) scale(0.97);
-    border-bottom-color: transparent;
 }
 
 /* Работаем по очереди: активен только первый пункт, остальные заблокированы до его выполнения */
