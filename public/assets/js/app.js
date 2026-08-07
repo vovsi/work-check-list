@@ -4,16 +4,17 @@
 
     // ==================== Тексты для копирования (пункты 6 и 7) ====================
 
-    const JIRA_COMMENT_TEXT =
-        'Для выливки необходимо:\n' +
-        '1. Запустить скрипты БД:\n```\n\n```\n' +
-        '2. Добавить в конфиг апи3:\n```\n\n```\n' +
-        '3. Вылить:';
+    function buildJiraCommentText(prLink) {
+        return 'Для выливки необходимо:\n' +
+            '1. Запустить скрипты БД:\n```\n\n```\n' +
+            '2. Добавить в конфиг апи3:\n```\n\n```\n' +
+            '3. Вылить: ' + (prLink || '[ссылка на PR не найдена — вставьте вручную]');
+    }
 
     const JIRA_DESCRIPTION_HTML =
-        '<b> Results</b><br/>1. <br/>' +
-        '<b> Testing</b><br/>1. <br/>' +
-        '<b> Pull Requests</b><br/>1. <br/>';
+        'Results</b><br/>1. <br/>' +
+        'Testing</b><br/>1. <br/>' +
+        'Pull Requests</b><br/>1. ';
 
     const JIRA_DESCRIPTION_PLAIN = 'Results\n1. \n\nTesting\n1. \n\nPull Requests\n1. ';
 
@@ -677,7 +678,8 @@
             await markDone(item.id);
         },
 
-        // Проверить PR через Claude — скопировать шаблон промпта со ссылкой на PR из шага «PR создан»
+        // Проверить PR через Claude — скопировать шаблон промпта со ссылкой на PR из шага «PR создан»,
+        // отметка пункта выполненным отдельной кнопкой (копирование можно повторять, не завершая пункт)
         claude_review: async (item) => {
             const reviewText = buildClaudeReviewText(sessionStorage.getItem(prLinkStorageKey()));
             const confirmed = await showModal(
@@ -685,13 +687,19 @@
                 `<div class="snippet">${escapeHtml(reviewText)}</div>`,
                 [
                     { label: 'Отмена', value: false },
-                    { label: 'Скопировать', primary: true, value: true },
+                    {
+                        label: 'Скопировать',
+                        keepOpen: true,
+                        onClick: async () => {
+                            await copyText(reviewText);
+                            notifyCopied('промпт для ревью Claude');
+                        },
+                    },
+                    { label: 'Завершить', primary: true, value: true },
                 ]
             );
             if (confirmed) {
-                await copyText(reviewText);
                 await markDone(item.id);
-                notifyCopied('промпт для ревью Claude');
             }
         },
 
@@ -730,18 +738,19 @@
             }
         },
 
-        // Оставить коммент в Jira — скопировать шаблон текста
+        // Оставить коммент в Jira — скопировать шаблон текста со ссылкой на PR из шага «PR создан»
         jira_comment: async (item) => {
+            const commentText = buildJiraCommentText(sessionStorage.getItem(prLinkStorageKey()));
             const confirmed = await showModal(
                 'Комментарий в Jira',
-                `<div class="snippet">${escapeHtml(JIRA_COMMENT_TEXT)}</div>`,
+                `<div class="snippet">${escapeHtml(commentText)}</div>`,
                 [
                     { label: 'Отмена', value: false },
                     { label: 'Скопировать', primary: true, value: true },
                 ]
             );
             if (confirmed) {
-                await copyText(JIRA_COMMENT_TEXT);
+                await copyText(commentText);
                 await markDone(item.id);
                 notifyCopied('комментарий для Jira');
             }
