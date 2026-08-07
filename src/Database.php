@@ -31,6 +31,7 @@ final class Database
         ['code' => 'pr_description', 'title' => 'Заполнить описание PR (ссылка, ревьюеры)'],
         ['code' => 'jira_comment', 'title' => 'Оставить коммент в Jira'],
         ['code' => 'jira_description', 'title' => 'Оставить описание в Jira'],
+        ['code' => 'status_pull_request', 'title' => 'Задача переведена в Pull Request'],
         ['code' => 'time_tracking', 'title' => 'Время в Jira затрекано'],
         ['code' => 'send_pr', 'title' => 'Отправить PR в ЛС'],
     ];

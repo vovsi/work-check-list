@@ -155,6 +155,7 @@
         pr_description: 'github',
         jira_comment: 'jira',
         jira_description: 'jira',
+        status_pull_request: 'jira',
         time_tracking: 'jira',
         send_pr: 'telegram',
     };
@@ -772,6 +773,9 @@
                 notifyCopied('описание для Jira (с форматированием)');
             }
         },
+
+        // Задача переведена в Pull Request — отмечается сразу
+        status_pull_request: (item) => markDone(item.id),
 
         // Затрекать время в Jira — отмечается сразу
         time_tracking: (item) => markDone(item.id),
