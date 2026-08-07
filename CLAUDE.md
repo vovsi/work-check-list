@@ -167,7 +167,7 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 | `jira_description` | Оставить описание в Jira | Jira | Показать HTML-текст с форматированием → «Скопировать» копирует (сохраняя стиль через `ClipboardItem`) и отмечает |
 | `status_pull_request` | Задача переведена в Pull Request | Jira | Отмечается сразу |
 | `time_tracking` | Время в Jira затрекано | Jira | Отмечается сразу |
-| `send_pr` | Отправить PR в ЛС | Telegram | Копирует ссылку на PR, сохранённую на шаге `pull_request` → отмечает |
+| `send_pr` | Отправить PR в ЛС | Telegram | Модалка: «Link to PR» копирует ссылку на PR из шага `pull_request`, «Details template» копирует шаблон для выливки (с `task_id` и ссылкой на PR) — обе не отмечают пункт и можно повторять → «Завершить» отмечает |
 
 Вся таблица «поведение» реализована как карта `ITEM_HANDLERS` в `public/assets/js/app.js` —
 при изменении поведения пункта правь соответствующую запись там же. Колонка «Сервис» —

@@ -11,6 +11,13 @@
             '3. Вылить: ' + (prLink || '[ссылка на PR не найдена — вставьте вручную]');
     }
 
+    function buildDeployDetailsText(taskId, prLink) {
+        return `Для выливки ${taskId} необходимо:\n` +
+            '1. Запустить скрипты БД:\n```\n\n```\n' +
+            '2. Добавить в конфиг апи3:\n```\n\n```\n' +
+            '3. Вылить: ' + (prLink || '[ссылка на PR не найдена — вставьте вручную]');
+    }
+
     const JIRA_DESCRIPTION_HTML =
         '<b> Results</b><br/>1. <br/>' +
         '<b> Testing</b><br/>1. <br/>' +
@@ -780,16 +787,41 @@
         // Затрекать время в Jira — отмечается сразу
         time_tracking: (item) => markDone(item.id),
 
-        // Отправить PR в ЛС — скопировать ранее сохранённую ссылку на PR
+        // Отправить PR в ЛС — модалка с двумя вариантами копирования, отметка только по «Завершить»
         send_pr: async (item) => {
             const link = sessionStorage.getItem(prLinkStorageKey());
-            if (link) {
-                await copyText(link);
-                notifyCopied(`ссылка на PR «${link}»`);
-            } else {
-                showToast('Ссылка на PR не найдена — скопируйте вручную');
+            const detailsText = buildDeployDetailsText(state.task.task_id, link);
+            const confirmed = await showModal(
+                'Отправить PR в ЛС',
+                `<div class="snippet">${escapeHtml(detailsText)}</div>`,
+                [
+                    { label: 'Отмена', value: false },
+                    {
+                        label: 'Link to PR',
+                        keepOpen: true,
+                        onClick: async () => {
+                            if (link) {
+                                await copyText(link);
+                                notifyCopied(`ссылка на PR «${link}»`);
+                            } else {
+                                showToast('Ссылка на PR не найдена — скопируйте вручную');
+                            }
+                        },
+                    },
+                    {
+                        label: 'Details template',
+                        keepOpen: true,
+                        onClick: async () => {
+                            await copyText(detailsText);
+                            notifyCopied('шаблон для выливки');
+                        },
+                    },
+                    { label: 'Завершить', primary: true, value: true },
+                ]
+            );
+            if (confirmed) {
+                await markDone(item.id);
             }
-            await markDone(item.id);
         },
     };
 
