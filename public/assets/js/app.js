@@ -647,10 +647,34 @@
         // Статус сменен на Doing — отмечается сразу
         status_doing: (item) => markDone(item.id),
 
-        // Создать ветку в Git — запросить название, скопировать, сохранить в задаче
+        // Создать ветку в Git — запросить название, скопировать, сохранить в задаче.
+        // Если ветка уже была сохранена ранее — можно оставить её без изменений в БД
         git_branch: async (item) => {
-            const branch = await promptModal('Название ветки', 'например feature/PROJ-123-описание');
-            if (!branch) return;
+            const existingBranch = state.task.git_branch;
+            const KEEP_CURRENT = Symbol('keep-current-branch');
+            const buttons = [{ label: 'Отмена', value: null }];
+            if (existingBranch) {
+                buttons.push({ label: 'Оставить текущую', value: KEEP_CURRENT });
+            }
+            buttons.push({
+                label: 'Сохранить',
+                primary: true,
+                getValue: () => modalBodyEl.querySelector('input').value.trim() || null,
+            });
+
+            const result = await showModal(
+                'Название ветки',
+                `<input type="text" class="input" placeholder="${escapeHtml('например feature/PROJ-123-описание')}">`,
+                buttons
+            );
+
+            if (result === KEEP_CURRENT) {
+                await markDone(item.id);
+                return;
+            }
+            if (!result) return;
+
+            const branch = result;
             const copied = await copyText(branch);
             await markDone(item.id, { branch });
             if (copied) {
@@ -718,7 +742,7 @@
                 `<div class="pr-steps">
                      <div class="pr-step pr-step--action" id="pr-copy-link-step">
                          <span class="pr-step-num">1</span>
-                         <span class="pr-step-text">Скопировать ссылку на задачу</span>
+                         <span class="pr-step-text">Вставьте ссылку в описание</span>
                          <span class="pr-step-icon">${COPY_SVG}</span>
                      </div>
                      <div class="pr-step">
@@ -727,7 +751,7 @@
                      </div>
                      <div class="pr-step">
                          <span class="pr-step-num">3</span>
-                         <span class="pr-step-text">Укажите в PR своего техлида и ревьювера</span>
+                         <span class="pr-step-text">Укажите в PR техлида и ревьювера</span>
                      </div>
                  </div>`,
                 [

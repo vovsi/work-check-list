@@ -158,7 +158,7 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 |---|---|---|---|
 | `story_points` | Story Points указано | Jira | Отмечается сразу |
 | `status_doing` | Статус сменен на Doing | Jira | Отмечается сразу |
-| `git_branch` | Создать ветку в Git | Git | Запросить название ветки → скопировать → сохранить в `tasks.git_branch` → отметить |
+| `git_branch` | Создать ветку в Git | Git | Запросить название ветки → скопировать → сохранить в `tasks.git_branch` → отметить. Если ветка уже сохранена — кнопка «Оставить текущую» отмечает пункт без изменения `tasks.git_branch` |
 | `code_written` | Код написан | PHP | Показать команду `git push origin <ветка>` (та же, что в дропдауне «Push») → «Скопировать» копирует и отмечает |
 | `pull_request` | PR создан | GitHub | Запросить ссылку на PR → сохранить в `sessionStorage` (для пункта `send_pr`) → отметить |
 | `claude_review` | Проверить PR Claude Code | Claude | Показать промпт для ревью (со ссылкой на PR из `sessionStorage`, шаг `pull_request`) → «Скопировать» копирует без отметки (можно повторять) → «Завершить» отмечает |
