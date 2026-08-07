@@ -466,6 +466,22 @@ html[data-theme="dark"] .checklist-item:hover {
     color: var(--text-primary);
 }
 
+/* Значок окна рядом с заголовком — намекает, что клик откроет модалку, а не сразу отметит пункт */
+.modal-hint-icon {
+    display: inline-flex;
+    width: 14px;
+    height: 14px;
+    margin-left: 6px;
+    vertical-align: -2px;
+    color: var(--text-secondary);
+    opacity: 0.85;
+}
+
+.modal-hint-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
 /* ==================== Кнопки ==================== */
 
 .btn {
@@ -696,9 +712,21 @@ html[data-theme="dark"] .checklist-item:hover {
 .modal-actions {
     flex: none;
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     flex-wrap: wrap;
     gap: 8px;
+}
+
+/* Группа повторяемых действий копирования сверху модалки — над «Отмена»/«Завершить» */
+.modal-copy-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+.modal-copy-actions .btn {
+    width: 100%;
 }
 
 /* ==================== Тост-уведомление ==================== */

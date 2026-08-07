@@ -92,6 +92,25 @@
         'stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.2"/>' +
         '<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
 
+    /** Значок окна — намекает, что по клику на пункт откроется модалка, а не сразу отметка */
+    const MODAL_HINT_SVG =
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+        'stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/>' +
+        '<path d="M3 9h18"/></svg>';
+
+    /** Пункты, клик по которым открывает модальное окно (а не сразу отмечает пункт) — рядом с
+     * заголовком таких пунктов рисуется MODAL_HINT_SVG */
+    const ITEM_OPENS_MODAL = new Set([
+        'git_branch',
+        'code_written',
+        'pull_request',
+        'claude_review',
+        'pr_description',
+        'jira_comment',
+        'jira_description',
+        'send_pr',
+    ]);
+
     // ==================== Иконки сервисов (справа у каждого пункта чек-листа) ====================
 
     /** Разметка и брендовый цвет иконки по сервису. Цвет одновременно — источник лёгкой подсветки строки */
@@ -429,9 +448,12 @@
             if (service) {
                 li.style.setProperty('--service-color', service.color);
             }
+            const modalHint = ITEM_OPENS_MODAL.has(item.code)
+                ? `<span class="modal-hint-icon" title="Открывает окно">${MODAL_HINT_SVG}</span>`
+                : '';
             li.innerHTML =
                 `<span class="checkbox">${CHECK_SVG}</span>` +
-                `<span class="item-title">${escapeHtml(item.title)}</span>` +
+                `<span class="item-title">${escapeHtml(item.title)}${modalHint}</span>` +
                 (service ? `<span class="service-icon" style="color: ${service.color}">${service.svg}</span>` : '');
             li.addEventListener('click', () => {
                 // 'done' — на случай повторного клика в ~0.5с окне до улёта пункта: сама li уже
@@ -716,19 +738,20 @@
             const reviewText = buildClaudeReviewText(sessionStorage.getItem(prLinkStorageKey()));
             const confirmed = await showModal(
                 'Проверка PR через Claude',
-                `<div class="snippet">${escapeHtml(reviewText)}</div>`,
+                `<div class="snippet">${escapeHtml(reviewText)}</div>` +
+                    '<div class="modal-copy-actions">' +
+                    '<button type="button" class="btn btn-secondary" data-copy-btn>Скопировать</button>' +
+                    '</div>',
                 [
                     { label: 'Отмена', value: false },
-                    {
-                        label: 'Скопировать',
-                        keepOpen: true,
-                        onClick: async () => {
-                            await copyText(reviewText);
-                            notifyCopied('промпт для ревью Claude');
-                        },
-                    },
                     { label: 'Завершить', primary: true, value: true },
-                ]
+                ],
+                (bodyEl) => {
+                    bodyEl.querySelector('[data-copy-btn]').addEventListener('click', async () => {
+                        await copyText(reviewText);
+                        notifyCopied('промпт для ревью Claude');
+                    });
+                }
             );
             if (confirmed) {
                 await markDone(item.id);
@@ -817,31 +840,28 @@
             const detailsText = buildDeployDetailsText(state.task.task_id, link);
             const confirmed = await showModal(
                 'Отправить PR в ЛС',
-                `<div class="snippet">${escapeHtml(detailsText)}</div>`,
+                '<div class="modal-copy-actions">' +
+                    '<button type="button" class="btn btn-secondary" data-copy-btn="link">Скопировать Link to PR</button>' +
+                    '<button type="button" class="btn btn-secondary" data-copy-btn="details">Скопировать Details template</button>' +
+                    '</div>',
                 [
                     { label: 'Отмена', value: false },
-                    {
-                        label: 'Link to PR',
-                        keepOpen: true,
-                        onClick: async () => {
-                            if (link) {
-                                await copyText(link);
-                                notifyCopied(`ссылка на PR «${link}»`);
-                            } else {
-                                showToast('Ссылка на PR не найдена — скопируйте вручную');
-                            }
-                        },
-                    },
-                    {
-                        label: 'Details template',
-                        keepOpen: true,
-                        onClick: async () => {
-                            await copyText(detailsText);
-                            notifyCopied('шаблон для выливки');
-                        },
-                    },
                     { label: 'Завершить', primary: true, value: true },
-                ]
+                ],
+                (bodyEl) => {
+                    bodyEl.querySelector('[data-copy-btn="link"]').addEventListener('click', async () => {
+                        if (link) {
+                            await copyText(link);
+                            notifyCopied(`ссылка на PR «${link}»`);
+                        } else {
+                            showToast('Ссылка на PR не найдена — скопируйте вручную');
+                        }
+                    });
+                    bodyEl.querySelector('[data-copy-btn="details"]').addEventListener('click', async () => {
+                        await copyText(detailsText);
+                        notifyCopied('шаблон для выливки');
+                    });
+                }
             );
             if (confirmed) {
                 await markDone(item.id);
