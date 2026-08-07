@@ -27,7 +27,7 @@ final class Database
         ['code' => 'git_branch', 'title' => 'Создать ветку в Git'],
         ['code' => 'code_written', 'title' => 'Код написан'],
         ['code' => 'pull_request', 'title' => 'PR создан'],
-        ['code' => 'claude_review', 'title' => 'PR проверен Claude'],
+        ['code' => 'claude_review', 'title' => 'Проверить PR Claude Code'],
         ['code' => 'pr_description', 'title' => 'Заполнить описание PR (ссылка, ревьюеры)'],
         ['code' => 'jira_comment', 'title' => 'Оставить коммент в Jira'],
         ['code' => 'jira_description', 'title' => 'Оставить описание в Jira'],

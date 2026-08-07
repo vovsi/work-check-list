@@ -569,6 +569,9 @@ html[data-theme="dark"] .checklist-item:hover {
 .modal {
     width: 100%;
     max-width: 360px;
+    max-height: 86vh;
+    display: flex;
+    flex-direction: column;
     animation: modal-in 0.16s ease;
 }
 
@@ -584,12 +587,16 @@ html[data-theme="dark"] .checklist-item:hover {
 }
 
 .modal-title {
+    flex: none;
     margin: 0 0 12px;
     font-size: 15.5px;
     font-weight: 600;
 }
 
 .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
     font-size: 13px;
     color: var(--text-secondary);
     line-height: 1.5;
@@ -605,6 +612,11 @@ html[data-theme="dark"] .checklist-item:hover {
     color: var(--text-primary);
     white-space: pre-wrap;
     margin-top: 8px;
+    display: -webkit-box;
+    -webkit-line-clamp: 14;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .modal-body .hint {
@@ -682,6 +694,7 @@ html[data-theme="dark"] .checklist-item:hover {
 }
 
 .modal-actions {
+    flex: none;
     display: flex;
     justify-content: flex-end;
     flex-wrap: wrap;
