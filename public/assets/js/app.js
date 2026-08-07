@@ -101,6 +101,13 @@
                 '6.998-3.014 3.332-1.386 4.023-1.627 4.476-1.635.099-.002.321.023.465.14.121.098.153.23.171.322' +
                 '.017.09.038.297.021.458z"/></svg>',
         },
+        php: {
+            color: '#777BB4',
+            svg:
+                '<svg viewBox="0 0 32 20"><rect width="32" height="20" rx="4" fill="currentColor"/>' +
+                '<text x="16" y="14.5" font-family="Helvetica, Arial, sans-serif" font-size="11" ' +
+                'font-weight="700" font-style="italic" fill="#fff" text-anchor="middle">php</text></svg>',
+        },
     };
 
     /** Какой сервис относится к каждому пункту чек-листа (код → ключ SERVICE_META) */
@@ -108,6 +115,7 @@
         story_points: 'jira',
         status_doing: 'jira',
         git_branch: 'git',
+        code_written: 'php',
         pull_request: 'github',
         claude_review: 'claude',
         pr_description: 'github',
@@ -384,7 +392,11 @@
                 `<span class="item-title">${escapeHtml(item.title)}</span>` +
                 (service ? `<span class="service-icon" style="color: ${service.color}">${service.svg}</span>` : '');
             li.addEventListener('click', () => {
-                if (li.classList.contains('locked')) return;
+                // 'done' — на случай повторного клика в ~0.5с окне до улёта пункта: сама li уже
+                // отмечена выполненной, но замыкание ниже всё ещё держит старый объект item
+                // (state.checklist был заменён новым массивом после markDone), поэтому проверка
+                // item.is_done внутри handleItemClick тут не сработает — нужна проверка по DOM.
+                if (li.classList.contains('locked') || li.classList.contains('done')) return;
                 handleItemClick(item);
             });
             checklistEl.appendChild(li);
@@ -603,6 +615,24 @@
                 notifyCopied(`название ветки «${branch}»`);
             } else {
                 showToast('Ветка сохранена, но не скопирована');
+            }
+        },
+
+        // Код написан — показать команду git push (та же, что в дропдауне «Push»), отметить по копированию
+        code_written: async (item) => {
+            const command = GIT_ACTION_COMMANDS.push(state.task.git_branch);
+            const confirmed = await showModal(
+                'Код написан',
+                `<div class="snippet">${escapeHtml(command)}</div>`,
+                [
+                    { label: 'Отмена', value: false },
+                    { label: 'Скопировать', primary: true, value: true },
+                ]
+            );
+            if (confirmed) {
+                await copyText(command);
+                await markDone(item.id);
+                notifyCopied(`команда «${command}»`);
             }
         },
 

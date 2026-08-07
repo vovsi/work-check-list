@@ -373,15 +373,17 @@ html[data-theme="dark"] .checklist-item:hover {
 .service-icon {
     margin-left: auto;
     flex: none;
-    width: 15px;
     height: 15px;
     display: flex;
+    align-items: center;
     opacity: 0.9;
 }
 
+/* Ширина не фиксируется — квадратные иконки останутся 15x15, а более широкие
+   (например бейдж "php") сохранят свои пропорции по высоте 15px */
 .service-icon svg {
-    width: 100%;
     height: 100%;
+    width: auto;
 }
 
 /* Пункт улетает из списка после отметки выполнения (max-height задаётся инлайново из JS) */
