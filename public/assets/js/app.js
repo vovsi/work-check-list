@@ -12,9 +12,9 @@
     }
 
     const JIRA_DESCRIPTION_HTML =
-        'Results</b><br/>1. <br/>' +
-        'Testing</b><br/>1. <br/>' +
-        'Pull Requests</b><br/>1. ';
+        '<b> Results</b><br/>1. <br/>' +
+        '<b> Testing</b><br/>1. <br/>' +
+        '<b> Pull Requests</b><br/>1. <br/>';
 
     const JIRA_DESCRIPTION_PLAIN = 'Results\n1. \n\nTesting\n1. \n\nPull Requests\n1. ';
 
