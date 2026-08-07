@@ -54,6 +54,12 @@ $assetVersion = static function (string $relativePath): string {
                 autofocus
             >
             <div id="link-error" class="error-text hidden"></div>
+
+            <!-- Последние открытые задачи (localStorage) — клик открывает задачу без ввода ссылки -->
+            <div id="recent-tasks" class="recent-tasks hidden">
+                <div class="recent-tasks-title">Последние задачи</div>
+                <div id="recent-tasks-list" class="recent-tasks-list"></div>
+            </div>
         </div>
     </section>
 
@@ -74,7 +80,7 @@ $assetVersion = static function (string $relativePath): string {
 
         <ul id="checklist" class="checklist"></ul>
 
-        <button id="finish-task-btn" class="btn btn-primary finish-btn">Завершить задачу</button>
+        <button id="finish-task-btn" class="btn btn-primary finish-btn">Начать заново</button>
 
         <div class="git-branch-footer" id="git-branch-footer">
             <button id="git-branch-value" class="branch-pill hidden" title="Скопировать ветку"></button>

@@ -23,6 +23,8 @@
     const taskScreen = document.getElementById('task-screen');
     const taskLinkInput = document.getElementById('task-link-input');
     const linkError = document.getElementById('link-error');
+    const recentTasksEl = document.getElementById('recent-tasks');
+    const recentTasksListEl = document.getElementById('recent-tasks-list');
     const taskIdLabel = document.getElementById('task-id-label');
     const changeTaskBtn = document.getElementById('change-task-btn');
     const checklistEl = document.getElementById('checklist');
@@ -117,6 +119,10 @@
 
     /** Ключ localStorage — под ним хранится ссылка последней открытой задачи */
     const TASK_LINK_STORAGE_KEY = 'wcl_task_link';
+
+    /** Ключ localStorage и лимит для списка последних открытых задач на экране ввода ссылки */
+    const RECENT_TASKS_STORAGE_KEY = 'wcl_recent_tasks';
+    const RECENT_TASKS_LIMIT = 10;
 
     /** Состояние текущей задачи и чек-листа */
     const state = {
@@ -460,6 +466,61 @@
         linkScreen.classList.remove('hidden');
         taskLinkInput.value = '';
         taskLinkInput.focus();
+        renderRecentTasks();
+    }
+
+    // ==================== Последние открытые задачи (экран ввода ссылки) ====================
+
+    function getRecentTasks() {
+        try {
+            const list = JSON.parse(localStorage.getItem(RECENT_TASKS_STORAGE_KEY));
+            return Array.isArray(list) ? list : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    /** Добавляет задачу в начало списка последних (без дублей, максимум RECENT_TASKS_LIMIT) */
+    function rememberRecentTask(task) {
+        const withoutCurrent = getRecentTasks().filter((t) => t.taskId !== task.task_id);
+        withoutCurrent.unshift({ taskId: task.task_id, link: task.task_link });
+        localStorage.setItem(
+            RECENT_TASKS_STORAGE_KEY,
+            JSON.stringify(withoutCurrent.slice(0, RECENT_TASKS_LIMIT))
+        );
+    }
+
+    /** Рендерит список последних задач на экране ввода ссылки; клик по строке открывает задачу */
+    function renderRecentTasks() {
+        const tasks = getRecentTasks();
+        if (tasks.length === 0) {
+            recentTasksEl.classList.add('hidden');
+            return;
+        }
+
+        recentTasksListEl.innerHTML = '';
+        tasks.forEach((task) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'recent-task-item';
+            btn.innerHTML =
+                `<span class="recent-task-code">${escapeHtml(task.taskId)}</span>` +
+                '<span class="recent-task-percent"></span>';
+            btn.addEventListener('click', () => loadTask(task.link));
+            recentTasksListEl.appendChild(btn);
+
+            // Процент выполнения подгружается отдельно и необязателен для самого открытия
+            // задачи — ошибка (например, задача удалена из БД) просто оставит поле пустым.
+            apiCall('../api/state.php', { link: task.link })
+                .then((data) => {
+                    const total = data.checklist.length;
+                    const done = data.checklist.filter((item) => item.is_done).length;
+                    const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+                    btn.querySelector('.recent-task-percent').textContent = `${percent}%`;
+                })
+                .catch(() => {});
+        });
+        recentTasksEl.classList.remove('hidden');
     }
 
     // ==================== Загрузка / обновление задачи ====================
@@ -468,6 +529,7 @@
         state.task = data.task;
         state.checklist = data.checklist;
         localStorage.setItem(TASK_LINK_STORAGE_KEY, link);
+        rememberRecentTask(data.task);
         showTaskScreen();
     }
 
