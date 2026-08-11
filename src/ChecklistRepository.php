@@ -67,6 +67,15 @@ final class ChecklistRepository
         );
     }
 
+    /**
+     * Удаляет все отметки чек-листа задачи (перед удалением самой задачи).
+     */
+    public function deleteForTask(int $taskId): void
+    {
+        $stmt = $this->db->prepare('DELETE FROM task_checklist WHERE task_id = :task_id');
+        $stmt->execute(['task_id' => $taskId]);
+    }
+
     public function setDone(int $taskId, int $checklistId, bool $done): void
     {
         $stmt = $this->db->prepare(

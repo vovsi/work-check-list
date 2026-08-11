@@ -58,6 +58,12 @@ final class TaskRepository
         $stmt->execute(['branch' => $branch, 'id' => $taskId]);
     }
 
+    public function delete(int $id): void
+    {
+        $stmt = $this->db->prepare('DELETE FROM tasks WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+    }
+
     /**
      * Извлекает идентификатор задачи (например PROJ-123) из ссылки Jira.
      * Если ссылка сама по себе похожа на идентификатор — возвращает её как есть.

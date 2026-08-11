@@ -42,4 +42,23 @@ final class TaskService
             'isNew' => true,
         ];
     }
+
+    /**
+     * Полностью удаляет задачу и её чек-лист по ссылке/идентификатору.
+     * Возвращает false, если задача не найдена.
+     */
+    public function deleteByLink(string $link): bool
+    {
+        $taskId = $this->tasks->extractTaskId($link);
+        $existing = $this->tasks->findByLinkOrTaskId($link, $taskId);
+
+        if ($existing === null) {
+            return false;
+        }
+
+        $this->checklist->deleteForTask((int) $existing['id']);
+        $this->tasks->delete((int) $existing['id']);
+
+        return true;
+    }
 }

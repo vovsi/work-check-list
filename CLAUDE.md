@@ -54,6 +54,7 @@ api/
   state.php                  — POST: read-only чтение текущего состояния задачи (без сброса)
   toggle.php                — POST: отметить пункт чек-листа
   finish.php                — POST: сбросить чек-лист («Завершить задачу»)
+  delete_task.php            — POST: полностью удалить задачу и её чек-лист
 public/
   index.php                 — единственная HTML-страница приложения
   assets/css/style.css      — стили (светлая/тёмная тема, glass-эффект в духе macOS)
@@ -239,6 +240,21 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 все пункты обнуляются, кроме `ALWAYS_DONE_ON_RESET_CODES` (принудительно отмечаются выполненными).
 
 Ответ: `{ "checklist": [...] }`
+
+### `POST /api/delete_task.php` — удалить задачу
+
+Запрос: `{ "link": "https://.../browse/PROJ-123" }`
+
+Полностью удаляет задачу и её чек-лист из БД (`TaskService::deleteByLink` →
+`ChecklistRepository::deleteForTask` + `TaskRepository::delete`) — без возврата, в отличие от
+`finish.php`, который только сбрасывает отметки. 404 (`{"error": "Задача не найдена"}`), если
+задачи с такой ссылкой/id нет.
+
+Вызывается из списка «Последние задачи» на экране ввода ссылки (иконка корзины у строки,
+`app.js`) — после подтверждения в модалке удаляет запись и из `wcl_recent_tasks` в
+`localStorage`.
+
+Ответ: `{ "success": true }`
 
 ## Frontend (`public/`)
 

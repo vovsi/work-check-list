@@ -572,6 +572,43 @@
         );
     }
 
+    /** Убирает задачу из списка последних (используется при удалении задачи) */
+    function forgetRecentTask(taskId) {
+        const withoutTask = getRecentTasks().filter((t) => t.taskId !== taskId);
+        localStorage.setItem(RECENT_TASKS_STORAGE_KEY, JSON.stringify(withoutTask));
+    }
+
+    const TRASH_ICON_SVG =
+        '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" ' +
+        'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<polyline points="3 6 5 6 21 6"></polyline>' +
+        '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>' +
+        '<path d="M10 11v6"></path><path d="M14 11v6"></path>' +
+        '<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>' +
+        '</svg>';
+
+    /** Запрашивает подтверждение и удаляет задачу из БД и списка последних */
+    async function deleteRecentTask(task) {
+        const confirmed = await showModal(
+            'Удалить задачу?',
+            `<p>Задача «${escapeHtml(task.taskId)}» и весь её чек-лист будут удалены без возможности восстановления.</p>`,
+            [
+                { label: 'Отмена', value: false },
+                { label: 'Удалить', primary: true, value: true },
+            ]
+        );
+        if (!confirmed) return;
+
+        try {
+            await apiCall('../api/delete_task.php', { link: task.link });
+        } catch (e) {
+            // Задача уже отсутствует в БД (например, удалена ранее из другого окна) —
+            // всё равно чистим локальный список, чтобы строка не висела вечно.
+        }
+        forgetRecentTask(task.taskId);
+        renderRecentTasks();
+    }
+
     /** Рендерит список последних задач на экране ввода ссылки; клик по строке открывает задачу */
     function renderRecentTasks() {
         const tasks = getRecentTasks();
@@ -582,14 +619,28 @@
 
         recentTasksListEl.innerHTML = '';
         tasks.forEach((task) => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'recent-task-item';
-            btn.innerHTML =
+            const row = document.createElement('div');
+            row.className = 'recent-task-item';
+
+            const openBtn = document.createElement('button');
+            openBtn.type = 'button';
+            openBtn.className = 'recent-task-open';
+            openBtn.innerHTML =
                 `<span class="recent-task-code">${escapeHtml(task.taskId)}</span>` +
                 '<span class="recent-task-percent"></span>';
-            btn.addEventListener('click', () => loadTask(task.link));
-            recentTasksListEl.appendChild(btn);
+            openBtn.addEventListener('click', () => loadTask(task.link));
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.type = 'button';
+            deleteBtn.className = 'recent-task-delete';
+            deleteBtn.title = 'Удалить задачу';
+            deleteBtn.setAttribute('aria-label', 'Удалить задачу');
+            deleteBtn.innerHTML = TRASH_ICON_SVG;
+            deleteBtn.addEventListener('click', () => deleteRecentTask(task));
+
+            row.appendChild(openBtn);
+            row.appendChild(deleteBtn);
+            recentTasksListEl.appendChild(row);
 
             // Процент выполнения подгружается отдельно и необязателен для самого открытия
             // задачи — ошибка (например, задача удалена из БД) просто оставит поле пустым.
@@ -598,7 +649,7 @@
                     const total = data.checklist.length;
                     const done = data.checklist.filter((item) => item.is_done).length;
                     const percent = total === 0 ? 0 : Math.round((done / total) * 100);
-                    btn.querySelector('.recent-task-percent').textContent = `${percent}%`;
+                    openBtn.querySelector('.recent-task-percent').textContent = `${percent}%`;
                 })
                 .catch(() => {});
         });
