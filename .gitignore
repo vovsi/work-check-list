@@ -1,2 +1,3 @@
 /storage/*.sqlite
 /.idea
+/config/params.ini

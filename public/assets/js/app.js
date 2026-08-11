@@ -299,7 +299,7 @@
                 buttonEl.textContent = btn.label;
                 buttonEl.addEventListener('click', async () => {
                     if (btn.onClick) {
-                        await btn.onClick();
+                        await btn.onClick(buttonEl);
                     }
                     if (btn.keepOpen) {
                         return;
@@ -706,21 +706,53 @@
             }
         },
 
-        // Код написан — показать команду git push (та же, что в дропдауне «Push»), отметить по копированию
+        // Закоммитить код — ввести описание, сгенерировать Commit Message нейронкой (копируется
+        // в буфер сразу по готовности, кнопку можно нажимать повторно), отметка пункта —
+        // только отдельной кнопкой «Завершить»
         code_written: async (item) => {
-            const command = GIT_ACTION_COMMANDS.push(state.task.git_branch);
             const confirmed = await showModal(
-                'Код написан',
-                `<div class="snippet">${escapeHtml(command)}</div>`,
+                'Закоммитить код',
+                `<textarea class="input textarea" rows="4" placeholder="${escapeHtml('Опишите что сделали...')}"></textarea>` +
+                    '<div class="modal-copy-actions">' +
+                    '<button type="button" class="btn btn-secondary" data-generate-btn>Сгенерировать Description</button>' +
+                    '</div>' +
+                    '<div class="snippet hidden" id="commit-message-result"></div>',
                 [
                     { label: 'Отмена', value: false },
-                    { label: 'Скопировать', primary: true, value: true },
-                ]
+                    { label: 'Завершить', primary: true, value: true },
+                ],
+                (bodyEl) => {
+                    bodyEl.querySelector('[data-generate-btn]').addEventListener('click', async (e) => {
+                        const buttonEl = e.currentTarget;
+                        const description = bodyEl.querySelector('textarea').value.trim();
+                        if (!description) {
+                            showToast('Опишите, что сделали');
+                            return;
+                        }
+
+                        buttonEl.disabled = true;
+                        buttonEl.classList.add('btn-loading');
+                        try {
+                            const data = await apiCall('../api/generate_commit_message.php', {
+                                description,
+                                task_id: state.task.task_id,
+                            });
+                            await copyText(data.message);
+                            notifyCopied('commit message');
+                            const resultEl = bodyEl.querySelector('#commit-message-result');
+                            resultEl.textContent = data.message;
+                            resultEl.classList.remove('hidden');
+                        } catch (e) {
+                            showToast(e.message || 'Не удалось сгенерировать commit message');
+                        } finally {
+                            buttonEl.disabled = false;
+                            buttonEl.classList.remove('btn-loading');
+                        }
+                    });
+                }
             );
             if (confirmed) {
-                await copyText(command);
                 await markDone(item.id);
-                notifyCopied(`команда «${command}»`);
             }
         },
 

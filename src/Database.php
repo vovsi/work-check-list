@@ -25,7 +25,7 @@ final class Database
         ['code' => 'story_points', 'title' => 'Story Points указано'],
         ['code' => 'status_doing', 'title' => 'Статус сменен на Doing'],
         ['code' => 'git_branch', 'title' => 'Создать ветку в Git'],
-        ['code' => 'code_written', 'title' => 'Код написан'],
+        ['code' => 'code_written', 'title' => 'Закоммитить код'],
         ['code' => 'pull_request', 'title' => 'PR создан'],
         ['code' => 'claude_review', 'title' => 'Проверить PR Claude Code'],
         ['code' => 'pr_description', 'title' => 'Заполнить описание PR'],

@@ -194,6 +194,12 @@ body {
     box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+textarea.input {
+    resize: vertical;
+    min-height: 84px;
+    line-height: 1.4;
+}
+
 .error-text {
     margin-top: 10px;
     font-size: 12.5px;
@@ -511,6 +517,33 @@ html[data-theme="dark"] .checklist-item:hover {
 .btn-secondary {
     background: rgba(127, 127, 127, 0.14);
     color: var(--text-primary);
+}
+
+/* Прелоадер на кнопке (например, «Сгенерировать Description» пока идёт запрос к нейронке) */
+.btn-loading {
+    position: relative;
+    color: transparent !important;
+    pointer-events: none;
+}
+
+.btn-loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border: 2px solid rgba(127, 127, 127, 0.35);
+    border-top-color: var(--text-primary);
+    border-radius: 50%;
+    animation: btn-spin 0.6s linear infinite;
+}
+
+@keyframes btn-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .finish-btn {

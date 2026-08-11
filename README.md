@@ -28,7 +28,30 @@ Stop: `docker compose down`
 
 - `database/schema.sql` — SQLite schema (tasks, checklist, task_checklist)
 - `storage/app.sqlite` — DB file, created automatically on first run
-- `src/` — classes (Database, TaskRepository, ChecklistRepository, TaskService)
-- `api/` — JSON endpoints (task.php, toggle.php, finish.php)
+- `src/` — classes (Database, TaskRepository, ChecklistRepository, TaskService, LlmClient, CommitMessageService)
+- `api/` — JSON endpoints (task.php, toggle.php, finish.php, generate_commit_message.php)
 - `public/` — frontend (index.php, assets/css, assets/js)
 - `Dockerfile`, `docker-compose.yml` — containerized run (PHP 8.3 + pdo_sqlite)
+- `config/params.ini` — local LLM config, not in git (see below)
+
+## LLM config (Commit Message generation)
+
+The "Закоммитить код" checklist item can generate a commit message via a local LLM server
+(e.g. LM Studio) exposing `POST <host>/api/v1/chat` with `{model, system_prompt, input}`.
+
+Copy the example config and point it at your LLM server:
+
+```bash
+cp config/params.ini.example config/params.ini
+```
+
+```ini
+[llm]
+host = "http://host.docker.internal:1234"
+model = "deepseek-coder-v2-lite-instruct"
+```
+
+`config/params.ini` is gitignored (host/model are local to your machine). Since the app runs
+in Docker, `localhost` inside the container points at the container itself — use
+`host.docker.internal` (or your host machine's LAN IP) to reach an LLM server running on the
+host. If you run the app without Docker (`php -S localhost:8000`), plain `localhost` works.
