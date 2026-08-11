@@ -55,3 +55,4 @@ model = "deepseek-coder-v2-lite-instruct"
 in Docker, `localhost` inside the container points at the container itself — use
 `host.docker.internal` (or your host machine's LAN IP) to reach an LLM server running on the
 host. If you run the app without Docker (`php -S localhost:8000`), plain `localhost` works.
+
