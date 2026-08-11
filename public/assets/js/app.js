@@ -116,7 +116,6 @@
         'code_written',
         'pull_request',
         'claude_review',
-        'pr_description',
         'jira_comment',
         'jira_description',
         'send_pr',
@@ -189,7 +188,6 @@
         code_written: 'php',
         pull_request: 'github',
         claude_review: 'claude',
-        pr_description: 'github',
         jira_comment: 'jira',
         jira_description: 'jira',
         status_pull_request: 'jira',
@@ -899,41 +897,6 @@
                     bodyEl.querySelector('[data-copy-btn]').addEventListener('click', async () => {
                         await copyText(reviewText);
                         notifyCopied('промпт для ревью Claude');
-                    });
-                }
-            );
-            if (confirmed) {
-                await markDone(item.id);
-            }
-        },
-
-        // Заполнить описание PR — чек-лист из 3 шагов, отметить по подтверждению
-        pr_description: async (item) => {
-            const confirmed = await showModal(
-                'Заполнение описания PR',
-                `<div class="pr-steps">
-                     <div class="pr-step pr-step--action" id="pr-copy-link-step">
-                         <span class="pr-step-num">1</span>
-                         <span class="pr-step-text">Вставьте ссылку в описание</span>
-                         <span class="pr-step-icon">${COPY_SVG}</span>
-                     </div>
-                     <div class="pr-step">
-                         <span class="pr-step-num">2</span>
-                         <span class="pr-step-text">Заасайните PR на себя</span>
-                     </div>
-                     <div class="pr-step">
-                         <span class="pr-step-num">3</span>
-                         <span class="pr-step-text">Укажите в PR техлида и ревьювера</span>
-                     </div>
-                 </div>`,
-                [
-                    { label: 'Отмена', value: false },
-                    { label: 'Готово', primary: true, value: true },
-                ],
-                (bodyEl) => {
-                    bodyEl.querySelector('#pr-copy-link-step').addEventListener('click', async () => {
-                        await copyText(state.task.task_link);
-                        notifyCopied(`ссылка на задачу «${state.task.task_link}»`);
                     });
                 }
             );
