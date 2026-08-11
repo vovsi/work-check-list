@@ -46,13 +46,16 @@ $assetVersion = static function (string $relativePath): string {
     <section id="link-screen" class="screen link-screen">
         <div class="card link-card">
             <h1 class="app-title">Work Check List</h1>
-            <input
-                type="text"
-                id="task-link-input"
-                class="input link-input"
-                placeholder="Вставьте ссылку на задачу Jira"
-                autofocus
-            >
+            <div class="link-input-row">
+                <input
+                    type="text"
+                    id="task-link-input"
+                    class="input link-input"
+                    placeholder="Вставьте ссылку на задачу Jira"
+                    autofocus
+                >
+                <button id="open-task-btn" class="btn btn-primary open-task-btn">Открыть</button>
+            </div>
             <div id="link-error" class="error-text hidden"></div>
 
             <!-- Последние открытые задачи (localStorage) — клик открывает задачу без ввода ссылки -->

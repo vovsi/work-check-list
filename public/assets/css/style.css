@@ -194,6 +194,20 @@ body {
     box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.link-input-row {
+    display: flex;
+    gap: 8px;
+}
+
+.link-input-row .link-input {
+    flex: 1;
+}
+
+.open-task-btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
 textarea.input {
     resize: vertical;
     min-height: 84px;

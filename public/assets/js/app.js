@@ -63,6 +63,7 @@
     const linkScreen = document.getElementById('link-screen');
     const taskScreen = document.getElementById('task-screen');
     const taskLinkInput = document.getElementById('task-link-input');
+    const openTaskBtn = document.getElementById('open-task-btn');
     const linkError = document.getElementById('link-error');
     const recentTasksEl = document.getElementById('recent-tasks');
     const recentTasksListEl = document.getElementById('recent-tasks-list');
@@ -913,12 +914,18 @@
 
     // ==================== Обработчики верхнего уровня ====================
 
-    taskLinkInput.addEventListener('keydown', (e) => {
-        if (e.key !== 'Enter') return;
+    function submitLink() {
         const link = taskLinkInput.value.trim();
         if (!link) return;
         loadTask(link);
+    }
+
+    taskLinkInput.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        submitLink();
     });
+
+    openTaskBtn.addEventListener('click', submitLink);
 
     changeTaskBtn.addEventListener('click', showLinkScreen);
 
