@@ -4,6 +4,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     task_link TEXT NOT NULL UNIQUE,
     task_id TEXT NOT NULL,
+    -- title/description — заголовок и описание из Jira. NULL, пока не стянуты
+    -- (см. TaskService::syncJiraIfMissing — тянутся один раз, дальше берутся из БД).
+    title TEXT DEFAULT NULL,
+    description TEXT DEFAULT NULL,
     git_branch TEXT DEFAULT NULL,
     stat TEXT NOT NULL DEFAULT 'active'
 );

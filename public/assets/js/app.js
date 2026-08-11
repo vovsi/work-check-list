@@ -87,6 +87,7 @@
     const gitActionsBtn = document.getElementById('git-actions-btn');
     const gitActionsPopover = document.getElementById('git-actions-popover');
     const settingsBtn = document.getElementById('settings-btn');
+    const jiraSyncBtn = document.getElementById('jira-sync-btn');
     const themePopover = document.getElementById('theme-popover');
     const toastEl = document.getElementById('toast');
     const modalOverlay = document.getElementById('modal-overlay');
@@ -527,6 +528,7 @@
         linkError.classList.add('hidden');
         linkScreen.classList.add('hidden');
         taskScreen.classList.remove('hidden');
+        jiraSyncBtn.classList.remove('hidden');
         taskIdLabel.textContent = state.task.task_id;
         renderGitBranch();
         renderChecklist();
@@ -537,6 +539,7 @@
         state.checklist = [];
         localStorage.removeItem(TASK_LINK_STORAGE_KEY);
         taskScreen.classList.add('hidden');
+        jiraSyncBtn.classList.add('hidden');
         linkScreen.classList.remove('hidden');
         taskLinkInput.value = '';
         taskLinkInput.focus();
@@ -771,8 +774,41 @@
 
             const result = await showModal(
                 'Название ветки',
-                `<input type="text" class="input" placeholder="${escapeHtml('например feature/PROJ-123-описание')}">`,
-                buttons
+                `<input type="text" class="input" placeholder="${escapeHtml('например feature/PROJ-123-описание')}">` +
+                    '<div class="modal-copy-actions modal-copy-actions--row">' +
+                    '<button type="button" class="btn btn-secondary" data-generate-branch-btn>Сгенерировать</button>' +
+                    '<button type="button" class="btn btn-secondary" data-copy-branch-btn>Скопировать</button>' +
+                    '</div>',
+                buttons,
+                (bodyEl) => {
+                    bodyEl.querySelector('[data-generate-branch-btn]').addEventListener('click', async (e) => {
+                        const buttonEl = e.currentTarget;
+                        buttonEl.disabled = true;
+                        buttonEl.classList.add('btn-loading');
+                        try {
+                            const data = await apiCall('../api/generate_branch_name.php', { task_id: state.task.id });
+                            bodyEl.querySelector('input').value = data.branch_name;
+                        } catch (genError) {
+                            showToast(genError.message || 'Не удалось сгенерировать название ветки');
+                        } finally {
+                            buttonEl.disabled = false;
+                            buttonEl.classList.remove('btn-loading');
+                        }
+                    });
+                    bodyEl.querySelector('[data-copy-branch-btn]').addEventListener('click', async () => {
+                        const branchValue = bodyEl.querySelector('input').value.trim();
+                        if (!branchValue) {
+                            showToast('Введите название ветки');
+                            return;
+                        }
+                        const copied = await copyText(branchValue);
+                        if (copied) {
+                            notifyCopied(`название ветки «${branchValue}»`);
+                        } else {
+                            showToast('Не удалось скопировать');
+                        }
+                    });
+                }
             );
 
             if (result === KEEP_CURRENT) {
@@ -1014,6 +1050,22 @@
         sessionStorage.removeItem(prLinkStorageKey());
         renderChecklist();
         showToast('Чек-лист сброшен');
+    });
+
+    // Принудительно перечитывает заголовок/описание задачи из Jira (в отличие от открытия
+    // задачи, которое тянет Jira только один раз — если данных ещё нет)
+    jiraSyncBtn.addEventListener('click', async () => {
+        if (jiraSyncBtn.classList.contains('syncing')) return;
+        jiraSyncBtn.classList.add('syncing');
+        try {
+            const data = await apiCall('../api/sync_jira.php', { task_id: state.task.id });
+            state.task = data.task;
+            showToast('Данные из Jira обновлены');
+        } catch (e) {
+            showToast(e.message || 'Не удалось обновить данные из Jira');
+        } finally {
+            jiraSyncBtn.classList.remove('syncing');
+        }
     });
 
     gitBranchValue.addEventListener('click', async () => {

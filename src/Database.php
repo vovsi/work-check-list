@@ -58,6 +58,7 @@ final class Database
         // Для БД, созданных до появления code/sort_order, — добираем недостающие колонки
         self::ensureChecklistColumns($pdo);
         self::backfillMissingCodes($pdo);
+        self::ensureTaskColumns($pdo);
 
         // ON CONFLICT (code) в seedChecklist требует уникального индекса по code
         $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_checklist_code ON checklist (code)');
@@ -96,6 +97,19 @@ final class Database
         foreach ($rows as $row) {
             $code = $codeByTitle[$row['title']] ?? ('legacy_' . $row['id']);
             $stmt->execute(['code' => $code, 'id' => $row['id']]);
+        }
+    }
+
+    /** Добавляет колонки title/description в tasks, если БД создана до интеграции с Jira */
+    private static function ensureTaskColumns(PDO $pdo): void
+    {
+        $columns = array_column($pdo->query('PRAGMA table_info(tasks)')->fetchAll(PDO::FETCH_ASSOC), 'name');
+
+        if (!in_array('title', $columns, true)) {
+            $pdo->exec('ALTER TABLE tasks ADD COLUMN title TEXT');
+        }
+        if (!in_array('description', $columns, true)) {
+            $pdo->exec('ALTER TABLE tasks ADD COLUMN description TEXT');
         }
     }
 

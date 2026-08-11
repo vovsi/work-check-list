@@ -11,3 +11,12 @@ model = "deepseek-coder-v2-lite-instruct"
 [github]
 ; Ники ревьюверов для команды `gh pr create --reviewer`, через запятую при нескольких.
 reviewers = "vovsi"
+
+[atlassian]
+; Данные для подтягивания заголовка/описания задачи из Jira при открытии (см. README).
+; base_url — адрес вашего Jira (Cloud или Server), например https://your-domain.atlassian.net
+; email — почта аккаунта Atlassian, на которую выпущен api_token
+; api_token — API-токен, создаётся на https://id.atlassian.com/manage-profile/security/api-tokens
+base_url = "https://your-domain.atlassian.net"
+email = "you@example.com"
+api_token = "your-api-token"

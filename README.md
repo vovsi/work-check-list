@@ -56,6 +56,23 @@ in Docker, `localhost` inside the container points at the container itself — u
 `host.docker.internal` (or your host machine's LAN IP) to reach an LLM server running on the
 host. If you run the app without Docker (`php -S localhost:8000`), plain `localhost` works.
 
+## Jira config (auto-fetch task title/description)
+
+Opening a task fetches its title/description from Jira once and stores them in the DB — the
+sync icon (top-left, next to the checklist) re-fetches on demand.
+
+Add credentials to `config/params.ini`:
+
+```ini
+[atlassian]
+base_url = "https://your-domain.atlassian.net"
+email = "you@example.com"
+api_token = "your-api-token"
+```
+
+Generate an API token at https://id.atlassian.com/manage-profile/security/api-tokens. Without
+this section the app still works — tasks just open without a synced title/description.
+
 ## GitHub CLI (PR creation)
 
 The "Создать PR" checklist item copies a `gh pr create ...` command (with reviewers from

@@ -24,6 +24,19 @@ final class Config
         return $data['llm'];
     }
 
+    public static function atlassian(): array
+    {
+        $data = self::load();
+
+        if (!isset($data['atlassian']['base_url'], $data['atlassian']['email'], $data['atlassian']['api_token'])) {
+            throw new RuntimeException(
+                'В config/params.ini не заданы atlassian.base_url, atlassian.email и atlassian.api_token — скопируйте config/params.ini.example'
+            );
+        }
+
+        return $data['atlassian'];
+    }
+
     /** Ники ревьюверов для команды `gh pr create --reviewer`. Не задано в конфиге — пустой список (флаг просто не добавляется в команду) */
     public static function githubReviewers(): array
     {

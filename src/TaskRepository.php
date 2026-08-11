@@ -58,6 +58,12 @@ final class TaskRepository
         $stmt->execute(['branch' => $branch, 'id' => $taskId]);
     }
 
+    public function updateJiraData(int $taskId, string $title, ?string $description): void
+    {
+        $stmt = $this->db->prepare('UPDATE tasks SET title = :title, description = :description WHERE id = :id');
+        $stmt->execute(['title' => $title, 'description' => $description, 'id' => $taskId]);
+    }
+
     public function delete(int $id): void
     {
         $stmt = $this->db->prepare('DELETE FROM tasks WHERE id = :id');

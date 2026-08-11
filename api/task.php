@@ -5,6 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
 
 use App\ChecklistRepository;
+use App\JiraSyncService;
 use App\TaskRepository;
 use App\TaskService;
 
@@ -19,7 +20,8 @@ if ($link === '') {
     respond(['error' => 'Не указана ссылка на задачу'], 422);
 }
 
-$service = new TaskService(new TaskRepository($pdo), new ChecklistRepository($pdo));
+$taskRepository = new TaskRepository($pdo);
+$service = new TaskService($taskRepository, new ChecklistRepository($pdo), JiraSyncService::createFromConfig($taskRepository));
 $result = $service->findOrCreateByLink($link);
 
 respond([

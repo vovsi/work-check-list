@@ -82,6 +82,26 @@ body {
     transform: rotate(20deg);
 }
 
+.jira-sync-btn {
+    left: 14px;
+    right: auto;
+}
+
+.jira-sync-btn.syncing {
+    pointer-events: none;
+    color: var(--accent);
+}
+
+.jira-sync-btn.syncing svg {
+    animation: jira-sync-spin 0.9s linear infinite;
+}
+
+@keyframes jira-sync-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
 .popover {
     background: var(--surface);
     backdrop-filter: blur(24px) saturate(180%);
@@ -843,11 +863,22 @@ html[data-theme="dark"] .checklist-item:hover {
     display: flex;
     flex-direction: column;
     gap: 8px;
+    margin-top: 10px;
     margin-bottom: 4px;
 }
 
 .modal-copy-actions .btn {
     width: 100%;
+}
+
+/* Вариант в один ряд (например «Сгенерировать» слева / «Скопировать» справа у названия ветки) */
+.modal-copy-actions--row {
+    flex-direction: row;
+}
+
+.modal-copy-actions--row .btn {
+    width: auto;
+    flex: 1;
 }
 
 /* ==================== Тост-уведомление ==================== */
