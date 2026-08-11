@@ -26,7 +26,7 @@ final class Database
         ['code' => 'status_doing', 'title' => 'Статус сменен на Doing'],
         ['code' => 'git_branch', 'title' => 'Создать ветку в Git'],
         ['code' => 'code_written', 'title' => 'Закоммитить код'],
-        ['code' => 'pull_request', 'title' => 'PR создан'],
+        ['code' => 'pull_request', 'title' => 'Создать PR'],
         ['code' => 'claude_review', 'title' => 'Проверить PR Claude Code'],
         ['code' => 'pr_description', 'title' => 'Заполнить описание PR'],
         ['code' => 'jira_comment', 'title' => 'Оставить коммент в Jira'],

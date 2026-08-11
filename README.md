@@ -55,3 +55,14 @@ model = "deepseek-coder-v2-lite-instruct"
 in Docker, `localhost` inside the container points at the container itself — use
 `host.docker.internal` (or your host machine's LAN IP) to reach an LLM server running on the
 host. If you run the app without Docker (`php -S localhost:8000`), plain `localhost` works.
+
+## GitHub CLI (PR creation)
+
+The "Создать PR" checklist item copies a `gh pr create ...` command (with reviewers from
+`config/params.ini`, section `[github]`, key `reviewers`). Running that command requires the
+GitHub CLI installed and authenticated on your machine:
+
+```bash
+brew install gh
+gh auth login
+```

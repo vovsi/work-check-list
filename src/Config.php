@@ -24,6 +24,19 @@ final class Config
         return $data['llm'];
     }
 
+    /** Ники ревьюверов для команды `gh pr create --reviewer`. Не задано в конфиге — пустой список (флаг просто не добавляется в команду) */
+    public static function githubReviewers(): array
+    {
+        $data = self::load();
+        $reviewers = trim((string) ($data['github']['reviewers'] ?? ''));
+
+        if ($reviewers === '') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('trim', explode(',', $reviewers))));
+    }
+
     private static function load(): array
     {
         if (self::$data === null) {

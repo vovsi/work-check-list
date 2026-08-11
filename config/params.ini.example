@@ -7,3 +7,7 @@
 ; (или IP хост-машины в локальной сети), если нейронка крутится на хосте.
 host = "http://host.docker.internal:1234"
 model = "deepseek-coder-v2-lite-instruct"
+
+[github]
+; Ники ревьюверов для команды `gh pr create --reviewer`, через запятую при нескольких.
+reviewers = "vovsi"

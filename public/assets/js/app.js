@@ -58,6 +58,16 @@
         (prLink || '[ссылка на PR не найдена — вставьте вручную]');
     }
 
+    /** Команда `gh pr create` для пункта «Создать PR» — ревьюверы подставляются из config/params.ini (см. Config::githubReviewers) */
+    function buildGhPrCreateCommand() {
+        const reviewers = (window.WCL_CONFIG && window.WCL_CONFIG.githubReviewers) || [];
+        let command = 'gh pr create --title "$(git log -1 --format=%s)" --body "$(git log -1 --format=%b)" --assignee "@me"';
+        if (reviewers.length > 0) {
+            command += ` --reviewer "${reviewers.join(',')}"`;
+        }
+        return command;
+    }
+
     // ==================== DOM-элементы ====================
 
     const linkScreen = document.getElementById('link-screen');
@@ -326,22 +336,6 @@
                 });
             }
         });
-    }
-
-    /** Модальное окно с текстовым полем ввода. Возвращает введённую строку или null */
-    function promptModal(title, placeholder) {
-        return showModal(
-            title,
-            `<input type="text" class="input" placeholder="${escapeHtml(placeholder)}">`,
-            [
-                { label: 'Отмена', value: null },
-                {
-                    label: 'Сохранить',
-                    primary: true,
-                    getValue: () => modalBodyEl.querySelector('input').value.trim() || null,
-                },
-            ]
-        );
     }
 
     // ==================== Тема оформления ====================
@@ -850,9 +844,38 @@
             }
         },
 
-        // Создать Pull Request — запросить ссылку, сохранить для пункта «Отправить PR в ЛС»
+        // Создать PR — 1) скопировать команду `gh pr create`, 2) вставить ссылку на созданный PR;
+        // ссылка сохраняется для пунктов «Проверить PR Claude Code», «Оставить коммент в Jira», «Отправить PR в ЛС»
         pull_request: async (item) => {
-            const link = await promptModal('Ссылка на Pull Request', 'https://github.com/...');
+            const command = buildGhPrCreateCommand();
+            const link = await showModal(
+                'Создать PR',
+                `<div class="pr-steps">
+                     <div class="pr-step">
+                         <span class="pr-step-num">1</span>
+                         <span class="pr-step-text">Выполните команду</span>
+                         <button type="button" class="btn btn-secondary" data-copy-command-btn>Скопировать</button>
+                     </div>
+                     <div class="pr-step">
+                         <span class="pr-step-num">2</span>
+                         <input type="text" class="input" id="pr-link-input" style="flex: 1;" placeholder="${escapeHtml('Вставьте ссылку на PR')}">
+                     </div>
+                 </div>`,
+                [
+                    { label: 'Отмена', value: null },
+                    {
+                        label: 'Завершить',
+                        primary: true,
+                        getValue: () => modalBodyEl.querySelector('#pr-link-input').value.trim() || null,
+                    },
+                ],
+                (bodyEl) => {
+                    bodyEl.querySelector('[data-copy-command-btn]').addEventListener('click', async () => {
+                        await copyText(command);
+                        notifyCopied('команда gh pr create');
+                    });
+                }
+            );
             if (!link) return;
             sessionStorage.setItem(prLinkStorageKey(), link);
             await markDone(item.id);

@@ -1,9 +1,22 @@
 <?php
+
+use App\Config;
+
+require_once __DIR__ . '/../src/bootstrap.php';
+
 // Страница активно меняется в разработке — запрещаем браузеру кешировать сам HTML,
 // чтобы правки разметки не терялись за старой закешированной версией страницы.
 header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Pragma: no-cache');
 header('Expires: 0');
+
+// Конфиг ревьюверов не обязателен для запуска приложения (см. README) — при отсутствии
+// config/params.ini страница всё равно должна открыться, просто без --reviewer в команде gh.
+try {
+    $githubReviewers = Config::githubReviewers();
+} catch (\Throwable $e) {
+    $githubReviewers = [];
+}
 
 // Версия статики = время последнего изменения файла: при каждой правке CSS/JS
 // у ссылки меняется ?v=..., и браузер больше не подставляет закешированную версию.
@@ -121,6 +134,9 @@ $assetVersion = static function (string $relativePath): string {
 <!-- Всплывающее уведомление (например «Скопировано») -->
 <div id="toast" class="toast"></div>
 
+<script>
+    window.WCL_CONFIG = { githubReviewers: <?= json_encode($githubReviewers, JSON_UNESCAPED_UNICODE) ?> };
+</script>
 <script src="assets/js/app.js?v=<?= $assetVersion('assets/js/app.js') ?>"></script>
 </body>
 </html>
