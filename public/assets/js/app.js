@@ -455,7 +455,8 @@
             li.innerHTML =
                 `<span class="checkbox">${CHECK_SVG}</span>` +
                 `<span class="item-title">${escapeHtml(item.title)}${modalHint}</span>` +
-                (service ? `<span class="service-icon" style="color: ${service.color}">${service.svg}</span>` : '');
+                (service ? `<span class="service-icon" style="color: ${service.color}">${service.svg}</span>` : '') +
+                `<button type="button" class="jump-here-btn">Перейти сюда</button>`;
             li.addEventListener('click', () => {
                 // 'done' — на случай повторного клика в ~0.5с окне до улёта пункта: сама li уже
                 // отмечена выполненной, но замыкание ниже всё ещё держит старый объект item
@@ -463,6 +464,10 @@
                 // item.is_done внутри handleItemClick тут не сработает — нужна проверка по DOM.
                 if (li.classList.contains('locked') || li.classList.contains('done')) return;
                 handleItemClick(item);
+            });
+            li.querySelector('.jump-here-btn').addEventListener('click', (e) => {
+                e.stopPropagation();
+                jumpToItem(item);
             });
             checklistEl.appendChild(li);
         });
@@ -657,6 +662,42 @@
         renderProgress();
         renderGitBranch();
         animateItemCompletion(checklistId);
+    }
+
+    let jumpInProgress = false;
+
+    /**
+     * «Перейти сюда» — отмечает выполненными все пункты выше указанного, без вызова их
+     * обработчиков (заглушка вместо реального действия: ветка/ссылка на PR и т.п. не
+     * сохраняются, просто пропускаются). Сам указанный пункт не трогаем — он становится
+     * активным по очереди после перерисовки.
+     */
+    async function jumpToItem(item) {
+        if (jumpInProgress) return;
+        const pending = state.checklist.filter((i) => !i.is_done);
+        const index = pending.findIndex((i) => i.id === item.id);
+        if (index <= 0) return;
+
+        jumpInProgress = true;
+        try {
+            let data = null;
+            for (const above of pending.slice(0, index)) {
+                data = await apiCall('../api/toggle.php', {
+                    task_id: state.task.id,
+                    checklist_id: above.id,
+                    done: true,
+                });
+            }
+            if (data) {
+                state.checklist = data.checklist;
+                if (data.task) {
+                    state.task = data.task;
+                }
+            }
+            renderChecklist();
+        } finally {
+            jumpInProgress = false;
+        }
     }
 
     // ==================== Поведение пунктов чек-листа ====================

@@ -412,10 +412,17 @@ html[data-theme="dark"] .checklist-item:hover {
     transform: translateX(36px) scale(0.97);
 }
 
-/* Работаем по очереди: активен только первый пункт, остальные заблокированы до его выполнения */
+/* Работаем по очереди: активен только первый пункт, остальные заблокированы до его выполнения.
+   Дименг применяется к дочерним элементам (а не к opacity всей li) — иначе кнопка
+   «Перейти сюда» при наведении тоже была бы затемнена родительским opacity. */
 .checklist-item.locked {
-    opacity: 0.4;
     cursor: not-allowed;
+}
+
+.checklist-item.locked .checkbox,
+.checklist-item.locked .item-title,
+.checklist-item.locked .service-icon {
+    opacity: 0.4;
 }
 
 .checklist-item.locked:hover {
@@ -424,6 +431,44 @@ html[data-theme="dark"] .checklist-item:hover {
 
 .checklist-item.locked .checkbox {
     border-color: var(--divider);
+}
+
+/* Высота ограничена высотой чекбокса (21px) — иначе кнопка на hover увеличивала бы
+   высоту всей строки и сдвигала список */
+.jump-here-btn {
+    display: none;
+    margin-left: auto;
+    flex: none;
+    height: 20px;
+    padding: 0 9px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 20px;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border: none;
+    border-radius: 7px;
+    cursor: pointer;
+    white-space: nowrap;
+    font-family: inherit;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.jump-here-btn:hover {
+    background: color-mix(in srgb, var(--accent) 22%, var(--accent-soft));
+}
+
+.jump-here-btn:active {
+    transform: scale(0.96);
+}
+
+.checklist-item.locked:hover .jump-here-btn {
+    display: inline-flex;
+    align-items: center;
+}
+
+.checklist-item.locked:hover .service-icon {
+    display: none;
 }
 
 .checklist-empty {
