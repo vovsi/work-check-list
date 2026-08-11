@@ -15,6 +15,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 $input = readJsonInput();
 $description = trim((string) ($input['description'] ?? ''));
 $taskId = trim((string) ($input['task_id'] ?? ''));
+$taskLink = trim((string) ($input['task_link'] ?? ''));
 
 if ($description === '') {
     respond(['error' => 'Не указано описание изменений'], 422);
@@ -23,7 +24,7 @@ if ($description === '') {
 try {
     $llmConfig = Config::llm();
     $service = new CommitMessageService(new LlmClient($llmConfig['host'], $llmConfig['model']), $llmConfig['model']);
-    $message = $service->generate($taskId, $description);
+    $message = $service->generate($taskId, $description, $taskLink);
 } catch (\Throwable $e) {
     respond(['error' => $e->getMessage()], 502);
 }

@@ -829,6 +829,7 @@
                             const data = await apiCall('../api/generate_commit_message.php', {
                                 description,
                                 task_id: state.task.task_id,
+                                task_link: state.task.task_link,
                             });
                             await copyText(data.message);
                             notifyCopied('commit message');
