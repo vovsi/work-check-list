@@ -250,6 +250,7 @@ textarea.input {
 }
 
 .recent-task-open {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -267,6 +268,7 @@ textarea.input {
     text-align: left;
     cursor: pointer;
     transition: background 0.12s ease;
+    overflow: hidden;
 }
 
 .recent-task-open:hover {
@@ -278,6 +280,89 @@ textarea.input {
     color: var(--success);
     font-weight: 700;
     font-size: 12.5px;
+}
+
+/* Прелоадер строки «Последние задачи» — волны расходятся от центра строки влево
+   и вправо к её краям (эффект касания воды), а не универсальный спиннер .btn-loading */
+.recent-task-open.btn-loading::after {
+    content: none;
+}
+
+.task-ripple {
+    display: none;
+    position: absolute;
+    inset: 0;
+}
+
+.recent-task-open.btn-loading .task-ripple {
+    display: block;
+}
+
+.task-ripple span {
+    position: absolute;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent) 0%, var(--accent) 40%, transparent 75%);
+    transform: translateY(-50%);
+    opacity: 0;
+}
+
+.task-ripple span:nth-child(1) {
+    left: 50%;
+    animation: ripple-out-left 1.8s ease-out infinite;
+}
+
+.task-ripple span:nth-child(2) {
+    right: 50%;
+    animation: ripple-out-right 1.8s ease-out infinite;
+}
+
+.task-ripple span:nth-child(3) {
+    left: 50%;
+    animation: ripple-out-left 1.8s ease-out infinite;
+    animation-delay: 0.6s;
+}
+
+.task-ripple span:nth-child(4) {
+    right: 50%;
+    animation: ripple-out-right 1.8s ease-out infinite;
+    animation-delay: 0.6s;
+}
+
+@keyframes ripple-out-left {
+    0% {
+        left: 50%;
+        opacity: 0.85;
+        transform: translateY(-50%) scale(0.3);
+    }
+    30% {
+        opacity: 0.7;
+        transform: translateY(-50%) scale(1);
+    }
+    100% {
+        left: 2%;
+        opacity: 0;
+        transform: translateY(-50%) scale(1.6);
+    }
+}
+
+@keyframes ripple-out-right {
+    0% {
+        right: 50%;
+        opacity: 0.85;
+        transform: translateY(-50%) scale(0.3);
+    }
+    30% {
+        opacity: 0.7;
+        transform: translateY(-50%) scale(1);
+    }
+    100% {
+        right: 2%;
+        opacity: 0;
+        transform: translateY(-50%) scale(1.6);
+    }
 }
 
 .recent-task-delete {

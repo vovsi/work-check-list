@@ -628,7 +628,10 @@
             openBtn.className = 'recent-task-open';
             openBtn.innerHTML =
                 `<span class="recent-task-code">${escapeHtml(task.taskId)}</span>` +
-                '<span class="recent-task-percent"></span>';
+                '<span class="recent-task-percent"></span>' +
+                '<span class="task-ripple" aria-hidden="true">' +
+                '<span></span><span></span><span></span><span></span>' +
+                '</span>';
             openBtn.addEventListener('click', async () => {
                 openBtn.disabled = true;
                 openBtn.classList.add('btn-loading');
