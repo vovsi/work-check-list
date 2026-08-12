@@ -28,7 +28,6 @@ final class Database
         ['code' => 'code_written', 'title' => 'Закоммитить код'],
         ['code' => 'pull_request', 'title' => 'Создать PR'],
         ['code' => 'claude_review', 'title' => 'Проверить PR Claude Code'],
-        ['code' => 'jira_comment', 'title' => 'Оставить коммент в Jira'],
         ['code' => 'jira_description', 'title' => 'Оставить описание в Jira'],
         ['code' => 'status_pull_request', 'title' => 'Задача переведена в Pull Request'],
         ['code' => 'time_tracking', 'title' => 'Время в Jira затрекано'],

@@ -169,7 +169,6 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 | `code_written` | Код написан | PHP | Показать команду `git push origin <ветка>` (та же, что в дропдауне «Push») → «Скопировать» копирует и отмечает |
 | `pull_request` | PR создан | GitHub | Запросить ссылку на PR → сохранить в `sessionStorage` (для пункта `send_pr`) → отметить |
 | `claude_review` | Проверить PR Claude Code | Claude | Показать промпт для ревью (со ссылкой на PR из `sessionStorage`, шаг `pull_request`), кнопка «Скопировать» в теле окна копирует без отметки (можно повторять) → «Завершить» в панели действий отмечает |
-| `jira_comment` | Оставить коммент в Jira | Jira | Показать текст-шаблон (со ссылкой на PR из `sessionStorage`, шаг `pull_request`) → «Скопировать» копирует и отмечает |
 | `jira_description` | Оставить описание в Jira | Jira | Показать HTML-текст с форматированием → «Скопировать» копирует (сохраняя стиль через `ClipboardItem`) и отмечает |
 | `status_pull_request` | Задача переведена в Pull Request | Jira | Отмечается сразу |
 | `time_tracking` | Время в Jira затрекано | Jira | Отмечается сразу |
@@ -180,7 +179,7 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 «Отмена» и финальная кнопка (`«Завершить»`/`«Сохранить»`/`«Готово»`) — в нижней панели
 действий (`.modal-actions`, `justify-content: space-between`), Отмена слева, финальная кнопка
 справа. Так сделаны `claude_review` и `send_pr`; остальные модалки с одной кнопкой-действием
-(например `code_written`, `jira_comment`) укладываются в тот же нижний ряд «Отмена слева /
+(например `code_written`, `jira_description`) укладываются в тот же нижний ряд «Отмена слева /
 действие справа» без отдельной группы копирования.
 
 **Стандарт для панели действий (`.modal-actions`) по числу кнопок — обязателен при добавлении

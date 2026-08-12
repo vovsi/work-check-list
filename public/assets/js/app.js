@@ -4,13 +4,6 @@
 
     // ==================== Тексты для копирования (пункты 6 и 7) ====================
 
-    function buildJiraCommentText(prLink) {
-        return 'Для выливки необходимо:\n' +
-            '1. Запустить скрипты БД:\n```\n\n```\n' +
-            '2. Добавить в конфиг апи3:\n```\n\n```\n' +
-            '3. Вылить: ' + (prLink || '[ссылка на PR не найдена — вставьте вручную]');
-    }
-
     function buildDeployDetailsText(taskId, prLink) {
         return `Для выливки ${taskId} необходимо:\n` +
             '1. Запустить скрипты БД:\n```\n\n```\n' +
@@ -117,7 +110,6 @@
         'code_written',
         'pull_request',
         'claude_review',
-        'jira_comment',
         'jira_description',
         'send_pr',
     ]);
@@ -189,7 +181,6 @@
         code_written: 'php',
         pull_request: 'github',
         claude_review: 'claude',
-        jira_comment: 'jira',
         jira_description: 'jira',
         status_pull_request: 'jira',
         time_tracking: 'jira',
@@ -966,7 +957,7 @@
         },
 
         // Создать PR — 1) скопировать команду `gh pr create`, 2) вставить ссылку на созданный PR;
-        // ссылка сохраняется для пунктов «Проверить PR Claude Code», «Оставить коммент в Jira», «Отправить PR в ЛС»
+        // ссылка сохраняется для пунктов «Проверить PR Claude Code», «Отправить PR в ЛС»
         pull_request: async (item) => {
             const command = buildGhPrCreateCommand();
             const link = await showModal(
@@ -1028,38 +1019,33 @@
             }
         },
 
-        // Оставить коммент в Jira — скопировать шаблон текста со ссылкой на PR из шага «PR создан»
-        jira_comment: async (item) => {
-            const commentText = buildJiraCommentText(sessionStorage.getItem(prLinkStorageKey()));
-            const confirmed = await showModal(
-                'Комментарий в Jira',
-                `<div class="snippet">${escapeHtml(commentText)}</div>`,
-                [
-                    { label: 'Отмена', value: false },
-                    { label: 'Скопировать', primary: true, value: true },
-                ]
-            );
-            if (confirmed) {
-                await copyText(commentText);
-                await markDone(item.id);
-                notifyCopied('комментарий для Jira');
-            }
-        },
-
-        // Оставить описание в Jira — скопировать текст с HTML-разметкой (сохраняет стиль)
+        // Оставить описание в Jira — кнопки копирования (описание и ссылка на PR из шага
+        // «PR создан») можно нажимать повторно, отметка пункта — отдельной кнопкой «Завершить»
         jira_description: async (item) => {
             const confirmed = await showModal(
                 'Описание в Jira',
-                `<div class="snippet" style="font-family: inherit;">${JIRA_DESCRIPTION_HTML}</div>`,
+                `<div class="snippet" style="font-family: inherit;">${JIRA_DESCRIPTION_HTML}</div>` +
+                    '<div class="modal-copy-actions">' +
+                    '<button type="button" class="btn btn-secondary" data-copy-btn>Скопировать</button>' +
+                    '<button type="button" class="btn btn-secondary" data-copy-pr-btn>Скопировать PR</button>' +
+                    '</div>',
                 [
                     { label: 'Отмена', value: false },
-                    { label: 'Скопировать', primary: true, value: true },
-                ]
+                    { label: 'Завершить', primary: true, value: true },
+                ],
+                (bodyEl) => {
+                    bodyEl.querySelector('[data-copy-btn]').addEventListener('click', async () => {
+                        await copyRichText(JIRA_DESCRIPTION_HTML, JIRA_DESCRIPTION_PLAIN);
+                        notifyCopied('описание для Jira (с форматированием)');
+                    });
+                    bodyEl.querySelector('[data-copy-pr-btn]').addEventListener('click', async () => {
+                        await copyText(sessionStorage.getItem(prLinkStorageKey()) || '');
+                        notifyCopied('ссылка на PR');
+                    });
+                }
             );
             if (confirmed) {
-                await copyRichText(JIRA_DESCRIPTION_HTML, JIRA_DESCRIPTION_PLAIN);
                 await markDone(item.id);
-                notifyCopied('описание для Jira (с форматированием)');
             }
         },
 
