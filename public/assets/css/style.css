@@ -842,11 +842,8 @@ html[data-theme="dark"] .checklist-item:hover {
     color: var(--text-primary);
     white-space: pre-wrap;
     margin-top: 8px;
-    display: -webkit-box;
-    -webkit-line-clamp: 14;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    max-height: 150px;
+    overflow-y: auto;
 }
 
 .modal-body .hint {
@@ -1001,6 +998,16 @@ html[data-theme="dark"] .checklist-item:hover {
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 8px;
+}
+
+/* 3+ кнопки не помещаются горизонтальным рядом на ширине 500×500 без неровного переноса —
+   стандарт: вертикальный full-width стек, порядок кнопок как передан (Отмена первая) */
+.modal-actions--stacked {
+    flex-direction: column;
+}
+
+.modal-actions--stacked .btn {
+    width: 100%;
 }
 
 /* Группа повторяемых действий копирования сверху модалки — над «Отмена»/«Завершить» */

@@ -9,7 +9,8 @@ use Throwable;
 
 /**
  * Оркестрирует поиск/создание задачи и подготовку её чек-листа.
- * Инкапсулирует бизнес-правило: для уже существующей задачи пункты 3-9 обнуляются,
+ * Для уже существующей задачи возвращается её текущий чек-лист как есть (без сброса —
+ * сброс делает только ChecklistRepository::resetAll по кнопке «Начать заново»),
  * для новой задачи создаётся полный чек-лист без отметок.
  */
 final class TaskService
@@ -30,7 +31,6 @@ final class TaskService
 
         if ($existing !== null) {
             $this->checklist->ensureRowsForTask((int) $existing['id']);
-            $this->checklist->resetOnReopen((int) $existing['id']);
             $task = $this->syncJira($existing);
 
             return [
