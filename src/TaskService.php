@@ -95,6 +95,30 @@ final class TaskService
     }
 
     /**
+     * Переводит задачу в Jira в статус Pull Request и отмечает пункт чек-листа выполненным.
+     * Пункт отмечается только при успешном переходе в Jira — по той же причине, что и
+     * updateStoryPoints() выше.
+     */
+    public function transitionToPullRequest(int $taskId, int $checklistId): array
+    {
+        $task = $this->tasks->findById($taskId);
+        if ($task === null) {
+            throw new RuntimeException('Задача не найдена');
+        }
+        if ($this->jiraSync === null) {
+            throw new RuntimeException('Интеграция с Jira не настроена — заполните config/params.ini');
+        }
+
+        $this->jiraSync->transitionToPullRequest($task);
+        $this->checklist->setDone($taskId, $checklistId, true);
+
+        return [
+            'task' => $task,
+            'checklist' => $this->checklist->getStatusesForTask($taskId),
+        ];
+    }
+
+    /**
      * Полностью удаляет задачу и её чек-лист по ссылке/идентификатору.
      * Возвращает false, если задача не найдена.
      */

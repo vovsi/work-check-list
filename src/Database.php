@@ -29,7 +29,7 @@ final class Database
         ['code' => 'pull_request', 'title' => 'Создать PR'],
         ['code' => 'claude_review', 'title' => 'Проверить PR Claude Code'],
         ['code' => 'jira_description', 'title' => 'Оставить описание в Jira'],
-        ['code' => 'status_pull_request', 'title' => 'Задача переведена в Pull Request'],
+        ['code' => 'status_pull_request', 'title' => 'Перевести задачу в Pull Request'],
         ['code' => 'time_tracking', 'title' => 'Время в Jira затрекано'],
         ['code' => 'send_pr', 'title' => 'Отправить PR в ЛС'],
     ];

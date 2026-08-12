@@ -32,7 +32,8 @@ final class JiraSyncService
                 $config['base_url'],
                 $config['email'],
                 $config['api_token'],
-                Config::atlassianStoryPointsField()
+                Config::atlassianStoryPointsField(),
+                Config::atlassianPullRequestStatus()
             ),
             $tasks
         );
@@ -49,5 +50,10 @@ final class JiraSyncService
     public function updateStoryPoints(array $task, int $storyPoints): void
     {
         $this->client->updateStoryPoints($task['task_id'], $storyPoints);
+    }
+
+    public function transitionToPullRequest(array $task): void
+    {
+        $this->client->transitionToPullRequest($task['task_id']);
     }
 }

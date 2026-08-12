@@ -51,6 +51,15 @@ final class Config
         return $field !== '' ? $field : 'customfield_10016';
     }
 
+    /** Название статуса Jira для перехода по пункту «Перевести задачу в Pull Request». Не задано в конфиге — по умолчанию "Pull request" */
+    public static function atlassianPullRequestStatus(): string
+    {
+        $data = self::load();
+        $status = trim((string) ($data['atlassian']['pull_request_status'] ?? ''));
+
+        return $status !== '' ? $status : 'Pull request';
+    }
+
     /** Ники ревьюверов для команды `gh pr create --reviewer`. Не задано в конфиге — пустой список (флаг просто не добавляется в команду) */
     public static function githubReviewers(): array
     {

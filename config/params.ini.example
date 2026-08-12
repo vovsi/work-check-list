@@ -24,3 +24,7 @@ api_token = "your-api-token"
 ; Необязательно — по умолчанию customfield_10016 (стандартное поле в большинстве Jira Cloud).
 ; Найти свой ID можно через GET /rest/api/2/field.
 story_points_field = "customfield_10016"
+; Название статуса Jira, в который переводится задача по пункту «Перевести задачу в
+; Pull Request» (должно точно совпадать с названием перехода в workflow вашей Jira).
+; Необязательно — по умолчанию "Pull request".
+pull_request_status = "Pull request"

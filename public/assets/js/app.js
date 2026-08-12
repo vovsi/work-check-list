@@ -1049,8 +1049,20 @@
             }
         },
 
-        // Задача переведена в Pull Request — отмечается сразу
-        status_pull_request: (item) => markDone(item.id),
+        // Перевести задачу в Pull Request — переводит статус задачи в Jira,
+        // отметка пункта — только при успешном переходе (см. update_story_points для того же паттерна)
+        status_pull_request: async (item) => {
+            try {
+                const data = await apiCall('../api/transition_pull_request.php', {
+                    task_id: state.task.id,
+                    checklist_id: item.id,
+                });
+                applyChecklistUpdate(data, item.id);
+                showToast('Задача переведена в статус Pull request');
+            } catch (e) {
+                showToast(e.message || 'Не удалось перевести статус задачи в Jira');
+            }
+        },
 
         // Затрекать время в Jira — отмечается сразу
         time_tracking: (item) => markDone(item.id),

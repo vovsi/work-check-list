@@ -170,7 +170,7 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 | `pull_request` | PR создан | GitHub | Запросить ссылку на PR → сохранить в `sessionStorage` (для пункта `send_pr`) → отметить |
 | `claude_review` | Проверить PR Claude Code | Claude | Показать промпт для ревью (со ссылкой на PR из `sessionStorage`, шаг `pull_request`), кнопка «Скопировать» в теле окна копирует без отметки (можно повторять) → «Завершить» в панели действий отмечает |
 | `jira_description` | Оставить описание в Jira | Jira | Показать HTML-текст с форматированием → «Скопировать» копирует (сохраняя стиль через `ClipboardItem`) и отмечает |
-| `status_pull_request` | Задача переведена в Pull Request | Jira | Отмечается сразу |
+| `status_pull_request` | Перевести задачу в Pull Request | Jira | Переводит задачу в Jira в статус из `config/params.ini` (`atlassian.pull_request_status`, по умолчанию «Pull request») через `api/transition_pull_request.php` → отмечается только при успешном переходе в Jira (тот же паттерн, что у `story_points`/`update_story_points.php`) |
 | `time_tracking` | Время в Jira затрекано | Jira | Отмечается сразу |
 | `send_pr` | Отправить PR в ЛС | Telegram | Модалка без текста-превью: кнопки копирования «Скопировать Link to PR» / «Скопировать Details template» (шаблон с `task_id` и ссылкой на PR из шага `pull_request`) в теле окна — не отмечают пункт, можно повторять → «Завершить» в панели действий отмечает |
 
