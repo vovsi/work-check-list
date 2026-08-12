@@ -31,7 +31,7 @@ final class TaskService
         if ($existing !== null) {
             $this->checklist->ensureRowsForTask((int) $existing['id']);
             $this->checklist->resetOnReopen((int) $existing['id']);
-            $task = $this->syncJiraIfMissing($existing);
+            $task = $this->syncJira($existing);
 
             return [
                 'task' => $task,
@@ -42,7 +42,7 @@ final class TaskService
 
         $task = $this->tasks->create($link, $taskId);
         $this->checklist->ensureRowsForTask((int) $task['id']);
-        $task = $this->syncJiraIfMissing($task);
+        $task = $this->syncJira($task);
 
         return [
             'task' => $task,
@@ -52,13 +52,14 @@ final class TaskService
     }
 
     /**
-     * Подтягивает заголовок/описание из Jira только если их ещё нет (title === null) —
-     * повторное открытие уже синхронизированной задачи Jira не дёргает. Ошибки (Jira недоступна
-     * или не настроена) не должны мешать открытию задачи — просто оставляем её без данных.
+     * Принудительно перечитывает заголовок/описание из Jira при каждом открытии задачи —
+     * Jira всегда источник истины, локальные данные только кэш для отображения. Ошибки
+     * (Jira недоступна или не настроена) не должны мешать открытию задачи — просто оставляем
+     * её с тем, что уже было сохранено.
      */
-    private function syncJiraIfMissing(array $task): array
+    public function syncJira(array $task): array
     {
-        if ($task['title'] !== null || $this->jiraSync === null) {
+        if ($this->jiraSync === null) {
             return $task;
         }
 
@@ -67,24 +68,6 @@ final class TaskService
         } catch (Throwable $e) {
             return $task;
         }
-    }
-
-    /**
-     * Принудительно перечитывает заголовок/описание из Jira (кнопка синхронизации на фронте).
-     * В отличие от syncJiraIfMissing — тянет всегда и пробрасывает ошибку вызывающему коду,
-     * чтобы пользователь увидел, что синхронизация не удалась.
-     */
-    public function resyncJira(int $taskId): array
-    {
-        $task = $this->tasks->findById($taskId);
-        if ($task === null) {
-            throw new RuntimeException('Задача не найдена');
-        }
-        if ($this->jiraSync === null) {
-            throw new RuntimeException('Интеграция с Jira не настроена — заполните config/params.ini');
-        }
-
-        return $this->jiraSync->sync($task);
     }
 
     /**

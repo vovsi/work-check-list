@@ -83,26 +83,6 @@ body {
     transform: rotate(20deg);
 }
 
-.jira-sync-btn {
-    left: 14px;
-    right: auto;
-}
-
-.jira-sync-btn.syncing {
-    pointer-events: none;
-    color: var(--accent);
-}
-
-.jira-sync-btn.syncing svg {
-    animation: jira-sync-spin 0.9s linear infinite;
-}
-
-@keyframes jira-sync-spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
 .popover {
     background: var(--surface);
     backdrop-filter: blur(24px) saturate(180%);

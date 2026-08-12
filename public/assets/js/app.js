@@ -87,7 +87,6 @@
     const gitActionsBtn = document.getElementById('git-actions-btn');
     const gitActionsPopover = document.getElementById('git-actions-popover');
     const settingsBtn = document.getElementById('settings-btn');
-    const jiraSyncBtn = document.getElementById('jira-sync-btn');
     const themePopover = document.getElementById('theme-popover');
     const toastEl = document.getElementById('toast');
     const modalOverlay = document.getElementById('modal-overlay');
@@ -529,7 +528,6 @@
         linkError.classList.add('hidden');
         linkScreen.classList.add('hidden');
         taskScreen.classList.remove('hidden');
-        jiraSyncBtn.classList.remove('hidden');
         taskIdLabel.textContent = state.task.task_id;
         renderGitBranch();
         renderChecklist();
@@ -540,7 +538,6 @@
         state.checklist = [];
         localStorage.removeItem(TASK_LINK_STORAGE_KEY);
         taskScreen.classList.add('hidden');
-        jiraSyncBtn.classList.add('hidden');
         linkScreen.classList.remove('hidden');
         taskLinkInput.value = '';
         taskLinkInput.focus();
@@ -666,6 +663,7 @@
      * Пользователь явно вставил ссылку на экране ввода — находит либо создаёт задачу.
      * Для уже существующей задачи применяется бизнес-правило сброса чек-листа
      * (см. ChecklistRepository::resetOnReopen) — это осознанное «переоткрытие» задачи.
+     * Заголовок/описание при этом всегда перечитываются из Jira (TaskService::syncJira).
      */
     async function loadTask(link) {
         try {
@@ -681,11 +679,12 @@
     /**
      * Восстанавливает уже открытую задачу после обновления страницы (ссылка из localStorage).
      * В отличие от loadTask — НЕ переоткрытие, поэтому чек-лист не сбрасывается: читаем
-     * текущее состояние как есть через отдельный read-only эндпоинт api/state.php.
+     * текущее состояние через api/state.php. Но это тоже открытие задачи, поэтому передаём
+     * refresh_jira — заголовок/описание всё равно перечитываются из Jira.
      */
     async function restoreTask(link) {
         try {
-            const data = await apiCall('../api/state.php', { link });
+            const data = await apiCall('../api/state.php', { link, refresh_jira: true });
             applyTaskState(data, link);
         } catch (e) {
             // Сохранённая ссылка больше не актуальна (например, БД была очищена) — просто
@@ -1102,22 +1101,6 @@
         sessionStorage.removeItem(prLinkStorageKey());
         renderChecklist();
         showToast('Чек-лист сброшен');
-    });
-
-    // Принудительно перечитывает заголовок/описание задачи из Jira (в отличие от открытия
-    // задачи, которое тянет Jira только один раз — если данных ещё нет)
-    jiraSyncBtn.addEventListener('click', async () => {
-        if (jiraSyncBtn.classList.contains('syncing')) return;
-        jiraSyncBtn.classList.add('syncing');
-        try {
-            const data = await apiCall('../api/sync_jira.php', { task_id: state.task.id });
-            state.task = data.task;
-            showToast('Данные из Jira обновлены');
-        } catch (e) {
-            showToast(e.message || 'Не удалось обновить данные из Jira');
-        } finally {
-            jiraSyncBtn.classList.remove('syncing');
-        }
     });
 
     gitBranchValue.addEventListener('click', async () => {

@@ -47,16 +47,6 @@ $assetVersion = static function (string $relativePath): string {
     </svg>
 </button>
 
-<!-- Иконка синхронизации данных задачи с Jira (видна только на экране открытой задачи) -->
-<button id="jira-sync-btn" class="icon-btn jira-sync-btn hidden" title="Обновить данные из Jira" aria-label="Обновить данные из Jira">
-    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M4 4v5h5"/>
-        <path d="M20 20v-5h-5"/>
-        <path d="M4.5 9a8 8 0 0 1 14.5-3.5L20 9"/>
-        <path d="M19.5 15a8 8 0 0 1-14.5 3.5L4 15"/>
-    </svg>
-</button>
-
 <!-- Попап выбора темы -->
 <div id="theme-popover" class="popover popover--theme hidden">
     <button class="theme-option" data-theme="light">Светлая</button>
