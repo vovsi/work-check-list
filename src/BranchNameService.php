@@ -25,6 +25,9 @@ Components
 - type — lowercase, one word, must match a predefined type (see below).
 - JIRA-CODE — exact Jira ticket ID (e.g. BAC-123), given below as "Jira key", used verbatim.
 - short-description — 3-5 words, lowercase, hyphen-separated (kebab-case), specific, not vague.
+  Only meaningful keywords (nouns, verbs, key entities) — drop prepositions, articles and
+  conjunctions (to, for, on, at, the, a, of, in, with, ...). E.g. prefer "usdt-alphapo-invoices"
+  over "usdtt-for-alphapo-invoices".
 
 Branch types — pick exactly one based on the task's title/description:
 - feature/ — new functionality, improvements, additions, new API endpoints, user stories.
@@ -55,12 +58,17 @@ PROMPT;
     {
     }
 
+    private const MAX_DESCRIPTION_WORDS = 5;
+
+    /** Нейронка периодически всё равно вставляет служебные слова несмотря на промпт — чистим сами */
+    private const STOP_WORDS = ['to', 'for', 'on', 'at', 'the', 'a', 'an', 'of', 'in', 'with', 'and', 'or'];
+
     public function generate(string $taskId, string $title, string $descriptionHtml): string
     {
         $description = $this->stripHtml($descriptionHtml);
         $input = "Jira key: {$taskId}\nTitle: {$title}\nDescription: {$description}";
 
-        return $this->sanitize($this->llmClient->chat(self::SYSTEM_PROMPT, $input));
+        return $this->limitDescriptionWords($this->sanitize($this->llmClient->chat(self::SYSTEM_PROMPT, $input)));
     }
 
     /** Description из Jira приходит как HTML (renderedFields) — для промпта нейронке нужен читаемый текст */
@@ -77,5 +85,19 @@ PROMPT;
         $firstLine = trim(strtok(trim($raw), "\n"));
 
         return trim($firstLine, " `'\"");
+    }
+
+    /** Промпт просит 3-5 слов в описании, но нейронка иногда игнорирует лимит — режем принудительно */
+    private function limitDescriptionWords(string $branchName): string
+    {
+        if (!preg_match('/^([a-z]+\/[A-Z]+-\d+)-(.+)$/', $branchName, $matches)) {
+            return $branchName;
+        }
+
+        [$prefix, $description] = [$matches[1], $matches[2]];
+        $words = array_values(array_diff(explode('-', $description), self::STOP_WORDS));
+        $words = array_slice($words, 0, self::MAX_DESCRIPTION_WORDS);
+
+        return $prefix . '-' . implode('-', $words);
     }
 }
