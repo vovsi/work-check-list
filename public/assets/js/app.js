@@ -287,10 +287,6 @@
             modalBodyEl.innerHTML = bodyHtml;
             modalActionsEl.innerHTML = '';
 
-            if (typeof onRender === 'function') {
-                onRender(modalBodyEl);
-            }
-
             function cleanup() {
                 modalOverlay.classList.add('hidden');
                 modalOverlay.removeEventListener('click', onOverlayClick);
@@ -301,6 +297,17 @@
                     cleanup();
                     resolve(null);
                 }
+            }
+
+            /** Позволяет onRender закрыть модалку вручную (например, после успешного API-запроса
+             * внутри собственного onClick кнопки, не дожидаясь стандартного авто-закрытия) */
+            function close(value) {
+                cleanup();
+                resolve(value);
+            }
+
+            if (typeof onRender === 'function') {
+                onRender(modalBodyEl, close);
             }
 
             buttons.forEach((btn) => {
@@ -621,7 +628,16 @@
             openBtn.innerHTML =
                 `<span class="recent-task-code">${escapeHtml(task.taskId)}</span>` +
                 '<span class="recent-task-percent"></span>';
-            openBtn.addEventListener('click', () => loadTask(task.link));
+            openBtn.addEventListener('click', async () => {
+                openBtn.disabled = true;
+                openBtn.classList.add('btn-loading');
+                try {
+                    await loadTask(task.link);
+                } finally {
+                    openBtn.disabled = false;
+                    openBtn.classList.remove('btn-loading');
+                }
+            });
 
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
@@ -778,7 +794,8 @@
                  </label>`
             ).join('');
 
-            const points = await showModal(
+            let closeModal = null;
+            await showModal(
                 'Указать Story Points',
                 `<div class="story-points-options">${optionsHtml}</div>`,
                 [
@@ -786,23 +803,32 @@
                     {
                         label: 'Подтвердить',
                         primary: true,
-                        getValue: () => Number(modalBodyEl.querySelector('input[name="story-points"]:checked').value),
+                        keepOpen: true, // модалка закрывается вручную через close() только после успешного ответа Jira
+                        onClick: async (buttonEl) => {
+                            const points = Number(modalBodyEl.querySelector('input[name="story-points"]:checked').value);
+                            buttonEl.disabled = true;
+                            buttonEl.classList.add('btn-loading');
+                            try {
+                                const data = await apiCall('../api/update_story_points.php', {
+                                    task_id: state.task.id,
+                                    checklist_id: item.id,
+                                    story_points: points,
+                                });
+                                applyChecklistUpdate(data, item.id);
+                                showToast('Story Points в задаче успешно обновлен');
+                                closeModal(points);
+                            } catch (e) {
+                                showToast(e.message || 'Не удалось обновить Story Points в Jira');
+                                buttonEl.disabled = false;
+                                buttonEl.classList.remove('btn-loading');
+                            }
+                        },
                     },
-                ]
+                ],
+                (bodyEl, close) => {
+                    closeModal = close;
+                }
             );
-            if (!points) return;
-
-            try {
-                const data = await apiCall('../api/update_story_points.php', {
-                    task_id: state.task.id,
-                    checklist_id: item.id,
-                    story_points: points,
-                });
-                applyChecklistUpdate(data, item.id);
-                showToast('Story Points в задаче успешно обновлен');
-            } catch (e) {
-                showToast(e.message || 'Не удалось обновить Story Points в Jira');
-            }
         },
 
         // Статус сменен на Doing — отмечается сразу
@@ -1080,10 +1106,17 @@
 
     // ==================== Обработчики верхнего уровня ====================
 
-    function submitLink() {
+    async function submitLink() {
         const link = taskLinkInput.value.trim();
         if (!link) return;
-        loadTask(link);
+        openTaskBtn.disabled = true;
+        openTaskBtn.classList.add('btn-loading');
+        try {
+            await loadTask(link);
+        } finally {
+            openTaskBtn.disabled = false;
+            openTaskBtn.classList.remove('btn-loading');
+        }
     }
 
     taskLinkInput.addEventListener('keydown', (e) => {
