@@ -23,7 +23,7 @@ if ($description === '') {
 
 try {
     $llmConfig = Config::llm();
-    $service = new CommitMessageService(new LlmClient($llmConfig['host'], $llmConfig['model']), $llmConfig['model']);
+    $service = new CommitMessageService(new LlmClient($llmConfig['host'], $llmConfig['model']));
     $message = $service->generate($taskId, $description, $taskLink);
 } catch (\Throwable $e) {
     respond(['error' => $e->getMessage()], 502);
