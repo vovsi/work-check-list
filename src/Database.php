@@ -30,7 +30,7 @@ final class Database
         ['code' => 'claude_review', 'title' => 'Проверить PR Claude Code'],
         ['code' => 'jira_description', 'title' => 'Оставить описание в Jira'],
         ['code' => 'status_pull_request', 'title' => 'Перевести задачу в Pull Request'],
-        ['code' => 'time_tracking', 'title' => 'Время в Jira затрекано'],
+        ['code' => 'time_tracking', 'title' => 'Затрекать время'],
         ['code' => 'send_pr', 'title' => 'Отправить PR в ЛС'],
     ];
 

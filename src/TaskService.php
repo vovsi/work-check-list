@@ -118,6 +118,44 @@ final class TaskService
         ];
     }
 
+    /** Читает уже затреканное в Jira время (без побочных эффектов) — для отображения в модалке перед добавлением нового worklog */
+    public function getTimeSpentSeconds(int $taskId): int
+    {
+        $task = $this->tasks->findById($taskId);
+        if ($task === null) {
+            throw new RuntimeException('Задача не найдена');
+        }
+        if ($this->jiraSync === null) {
+            throw new RuntimeException('Интеграция с Jira не настроена — заполните config/params.ini');
+        }
+
+        return $this->jiraSync->getTimeSpentSeconds($task);
+    }
+
+    /**
+     * Добавляет worklog в Jira (время сверх уже затреканного) и отмечает пункт чек-листа
+     * выполненным. Пункт отмечается только при успешном ответе Jira — по той же причине,
+     * что и updateStoryPoints()/transitionToPullRequest() выше.
+     */
+    public function logTime(int $taskId, int $checklistId, int $seconds): array
+    {
+        $task = $this->tasks->findById($taskId);
+        if ($task === null) {
+            throw new RuntimeException('Задача не найдена');
+        }
+        if ($this->jiraSync === null) {
+            throw new RuntimeException('Интеграция с Jira не настроена — заполните config/params.ini');
+        }
+
+        $this->jiraSync->addWorklog($task, $seconds);
+        $this->checklist->setDone($taskId, $checklistId, true);
+
+        return [
+            'task' => $task,
+            'checklist' => $this->checklist->getStatusesForTask($taskId),
+        ];
+    }
+
     /**
      * Полностью удаляет задачу и её чек-лист по ссылке/идентификатору.
      * Возвращает false, если задача не найдена.

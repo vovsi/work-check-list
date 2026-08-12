@@ -56,4 +56,14 @@ final class JiraSyncService
     {
         $this->client->transitionToPullRequest($task['task_id']);
     }
+
+    public function getTimeSpentSeconds(array $task): int
+    {
+        return $this->client->fetchTimeSpentSeconds($task['task_id']);
+    }
+
+    public function addWorklog(array $task, int $seconds): void
+    {
+        $this->client->addWorklog($task['task_id'], $seconds);
+    }
 }

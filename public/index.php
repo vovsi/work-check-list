@@ -134,6 +134,14 @@ $assetVersion = static function (string $relativePath): string {
 <!-- Всплывающее уведомление (например «Скопировано») -->
 <div id="toast" class="toast"></div>
 
+<!-- Глобальный прелоадер по центру экрана — для запросов, которые начинаются уже после
+     закрытия модалки (см. CLAUDE.md, раздел «Индикация загрузки») -->
+<div id="global-loader" class="global-loader hidden">
+    <span class="ios-spinner ios-spinner--lg" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+    </span>
+</div>
+
 <script>
     window.WCL_CONFIG = { githubReviewers: <?= json_encode($githubReviewers, JSON_UNESCAPED_UNICODE) ?> };
 </script>

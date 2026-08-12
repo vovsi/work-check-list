@@ -215,6 +215,91 @@ textarea.input {
     line-height: 1.4;
 }
 
+/* Часы/минуты в модалке пункта «Затрекать время» — два равных поля в ряд */
+.time-tracking-inputs {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.time-tracking-field {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.time-tracking-label {
+    padding-left: 2px;
+}
+
+/* Степпер в стиле iOS (UIStepper) — минус/плюс встроены в ту же пилюлю, что и .input,
+   заменяют собой нативные стрелочки браузера у type="number" (некрасивые и разные в каждом
+   браузере, см. .stepper-input ниже) */
+.stepper {
+    display: flex;
+    align-items: stretch;
+    border-radius: 12px;
+    border: 1px solid var(--checkbox-border);
+    background: rgba(127, 127, 127, 0.08);
+    overflow: hidden;
+}
+
+.stepper-btn {
+    flex: none;
+    width: 34px;
+    border: none;
+    background: none;
+    color: var(--accent);
+    font-size: 17px;
+    font-weight: 500;
+    line-height: 1;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.stepper-btn:first-child {
+    border-right: 1px solid var(--divider);
+}
+
+.stepper-btn:last-child {
+    border-left: 1px solid var(--divider);
+}
+
+.stepper-btn:hover {
+    background: rgba(127, 127, 127, 0.1);
+}
+
+.stepper-btn:active {
+    background: var(--accent-soft);
+}
+
+/* Перекрывает .input — убирает границу/фон/скругление у самого поля (они теперь у .stepper
+   целиком) и нативные стрелочки number-инпута во всех браузерах */
+.stepper-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 0;
+    border: none;
+    background: none;
+    border-radius: 0;
+    text-align: center;
+    -moz-appearance: textfield;
+}
+
+.stepper-input:focus {
+    box-shadow: none;
+}
+
+.stepper-input::-webkit-inner-spin-button,
+.stepper-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
 .error-text {
     margin-top: 10px;
     font-size: 12.5px;
@@ -282,12 +367,9 @@ textarea.input {
     font-size: 12.5px;
 }
 
-/* Прелоадер строки «Последние задачи» — волны расходятся от центра строки влево
-   и вправо к её краям (эффект касания воды), а не универсальный спиннер .btn-loading */
-.recent-task-open.btn-loading::after {
-    content: none;
-}
-
+/* Прелоадер строки «Последние задачи» — осознанное исключение из единого .ios-spinner:
+   волны расходятся от центра строки влево и вправо к её краям (эффект касания воды),
+   .btn-loading здесь используется только как хук для показа .task-ripple, без спиннера */
 .task-ripple {
     display: none;
     position: absolute;
@@ -543,7 +625,9 @@ html[data-theme="dark"] .checklist-item:hover {
 
 .checklist-item.locked .checkbox,
 .checklist-item.locked .item-title,
-.checklist-item.locked .service-icon {
+.checklist-item.locked .service-icon,
+.checklist-item.loading .checkbox,
+.checklist-item.loading .item-title {
     opacity: 0.4;
 }
 
@@ -625,6 +709,31 @@ html[data-theme="dark"] .checklist-item:hover {
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
+/* Пункт выполняет запрос к внешнему сервису прямо по клику (без модалки, например
+   «Перевести задачу в Pull Request») — по HIG активити-индикатор не должен занимать место
+   финального результата (там появится галочка), поэтому спиннер показывается в слоте
+   иконки сервиса справа, а не на чекбоксе; сама строка на время запроса не кликается */
+.checklist-item.loading {
+    cursor: default;
+    pointer-events: none;
+}
+
+.item-spinner {
+    display: none;
+    margin-left: auto;
+    flex: none;
+    color: var(--text-secondary);
+}
+
+.checklist-item.loading .item-spinner {
+    display: inline-flex;
+    align-items: center;
+}
+
+.checklist-item.loading .service-icon {
+    display: none;
+}
+
 .checkbox svg {
     width: 13px;
     height: 13px;
@@ -700,31 +809,21 @@ html[data-theme="dark"] .checklist-item:hover {
     color: var(--text-primary);
 }
 
-/* Прелоадер на кнопке (например, «Сгенерировать Description» пока идёт запрос к нейронке) */
+/* Прелоадер на кнопке (например, «Сгенерировать Description» пока идёт запрос к нейронке) —
+   текст гасится, а .ios-spinner (см. ниже) вставляется в кнопку через setButtonLoading()
+   и центрируется этим правилом. Исключение — .recent-task-open, у которой свой .task-ripple */
 .btn-loading {
     position: relative;
     color: transparent !important;
     pointer-events: none;
 }
 
-.btn-loading::after {
-    content: '';
+.btn-loading .ios-spinner {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 14px;
-    height: 14px;
-    margin: -7px 0 0 -7px;
-    border: 2px solid rgba(127, 127, 127, 0.35);
-    border-top-color: var(--text-primary);
-    border-radius: 50%;
-    animation: btn-spin 0.6s linear infinite;
-}
-
-@keyframes btn-spin {
-    to {
-        transform: rotate(360deg);
-    }
+    transform: translate(-50%, -50%);
+    color: var(--text-primary);
 }
 
 .finish-btn {
@@ -781,6 +880,86 @@ html[data-theme="dark"] .checklist-item:hover {
 .branch-pill:hover {
     background: rgba(127, 127, 127, 0.12);
     color: var(--text-secondary);
+}
+
+/* ==================== Индикатор загрузки (единый для всего приложения) ==================== */
+
+/* Единственный спиннер приложения — воспроизводит системный активити-индикатор iOS/macOS
+   (8 затухающих по кругу «спиц», а не кольцо с одним светлым сегментом). Используется везде:
+   на кнопках (setButtonLoading), на пункте чек-листа (setItemLoading) и в глобальном оверлее
+   (showGlobalLoader) — единственное осознанное исключение см. в .task-ripple выше.
+   Разметка — 8 <i> внутри .ios-spinner (spinnerHtml() в app.js), цвет — через currentColor. */
+.ios-spinner {
+    position: relative;
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+}
+
+.ios-spinner i {
+    position: absolute;
+    inset: 0;
+    transform-origin: 8px 8px;
+    animation: ios-spinner-fade 1.2s linear infinite;
+}
+
+.ios-spinner i::after {
+    content: '';
+    position: absolute;
+    top: 1px;
+    left: 7px;
+    width: 2px;
+    height: 5px;
+    border-radius: 1px;
+    background: currentColor;
+}
+
+.ios-spinner i:nth-child(1) { transform: rotate(0deg); animation-delay: -1.05s; }
+.ios-spinner i:nth-child(2) { transform: rotate(45deg); animation-delay: -0.9s; }
+.ios-spinner i:nth-child(3) { transform: rotate(90deg); animation-delay: -0.75s; }
+.ios-spinner i:nth-child(4) { transform: rotate(135deg); animation-delay: -0.6s; }
+.ios-spinner i:nth-child(5) { transform: rotate(180deg); animation-delay: -0.45s; }
+.ios-spinner i:nth-child(6) { transform: rotate(225deg); animation-delay: -0.3s; }
+.ios-spinner i:nth-child(7) { transform: rotate(270deg); animation-delay: -0.15s; }
+.ios-spinner i:nth-child(8) { transform: rotate(315deg); animation-delay: 0s; }
+
+@keyframes ios-spinner-fade {
+    0% { opacity: 1; }
+    100% { opacity: 0.15; }
+}
+
+.ios-spinner--lg {
+    width: 32px;
+    height: 32px;
+}
+
+.ios-spinner--lg i {
+    transform-origin: 16px 16px;
+}
+
+.ios-spinner--lg i::after {
+    top: 2px;
+    left: 14px;
+    width: 3px;
+    height: 9px;
+}
+
+/* Показывается по центру экрана, когда кнопка уже закрыла модалку, а запрос к внешнему
+   сервису (Jira/Git/нейронка) начинается только после закрытия — см. CLAUDE.md */
+.global-loader {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 60;
+    color: var(--text-primary);
+}
+
+.global-loader.hidden {
+    display: none;
 }
 
 /* ==================== Модальное окно ==================== */

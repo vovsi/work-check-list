@@ -86,6 +86,7 @@
     const modalTitleEl = document.getElementById('modal-title');
     const modalBodyEl = document.getElementById('modal-body');
     const modalActionsEl = document.getElementById('modal-actions');
+    const globalLoaderEl = document.getElementById('global-loader');
 
     const CHECK_SVG =
         '<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" ' +
@@ -95,6 +96,13 @@
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
         'stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="2.2"/>' +
         '<path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>';
+
+    /** Разметка единого спиннера приложения (см. .ios-spinner в style.css) — 8 «спиц»,
+     * затухающих по кругу, воспроизводит системный активити-индикатор iOS/macOS */
+    function spinnerHtml(size) {
+        const sizeClass = size === 'lg' ? ' ios-spinner--lg' : '';
+        return `<span class="ios-spinner${sizeClass}" aria-hidden="true">${'<i></i>'.repeat(8)}</span>`;
+    }
 
     /** Значок окна — намекает, что по клику на пункт откроется модалка, а не сразу отметка */
     const MODAL_HINT_SVG =
@@ -212,6 +220,30 @@
         return `wcl_pr_link_${state.task.id}`;
     }
 
+    /** Навешивает шаг +/- на кнопки степпера (см. .stepper в style.css) — шаг и границы
+     * берутся из data-step кнопки и min/max соседнего input внутри того же .stepper */
+    function bindSteppers(rootEl) {
+        rootEl.querySelectorAll('.stepper-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const input = btn.closest('.stepper').querySelector('input[type="number"]');
+                const step = Number(btn.dataset.step);
+                const min = input.min !== '' ? Number(input.min) : -Infinity;
+                const max = input.max !== '' ? Number(input.max) : Infinity;
+                const next = Math.min(max, Math.max(min, (parseInt(input.value, 10) || 0) + step));
+                input.value = next;
+            });
+        });
+    }
+
+    /** Форматирует секунды в компактную строку «Хч Ум» для отображения затреканного времени */
+    function formatDuration(totalSeconds) {
+        const totalMinutes = Math.round(totalSeconds / 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        if (hours === 0 && minutes === 0) return '0м';
+        return [hours ? `${hours}ч` : '', minutes ? `${minutes}м` : ''].filter(Boolean).join(' ');
+    }
+
     let toastTimer = null;
 
     function showToast(message) {
@@ -224,6 +256,37 @@
     /** Уведомление о том, что именно скопировано в буфер обмена (единый формат для всех копирований) */
     function notifyCopied(description) {
         showToast(`Скопировано: ${description}`);
+    }
+
+    /** Глобальный прелоадер по центру экрана — для запросов к внешним сервисам, начинающихся
+     * уже после закрытия модалки (кнопка, закрывающая модалку, не может показать спиннер на себе) */
+    function showGlobalLoader() {
+        globalLoaderEl.classList.remove('hidden');
+    }
+
+    function hideGlobalLoader() {
+        globalLoaderEl.classList.add('hidden');
+    }
+
+    /** Спиннер прямо на пункте чек-листа — для запросов к внешним сервисам, которые пункт
+     * запускает сразу по клику, без модалки (например «Перевести задачу в Pull Request») */
+    function setItemLoading(checklistId, loading) {
+        const li = checklistEl.querySelector(`li[data-checklist-id="${checklistId}"]`);
+        if (li) li.classList.toggle('loading', loading);
+    }
+
+    /** Спиннер на кнопке (например «Подтвердить»/«Сгенерировать» пока идёт запрос к внешнему
+     * сервису) — единая точка для паттерна disabled+спиннер, не повторяй его руками на местах.
+     * Исключение — .recent-task-open, у которой свой .task-ripple вместо этого спиннера. */
+    function setButtonLoading(buttonEl, loading) {
+        buttonEl.disabled = loading;
+        buttonEl.classList.toggle('btn-loading', loading);
+        if (loading) {
+            buttonEl.insertAdjacentHTML('beforeend', spinnerHtml());
+        } else {
+            const spinner = buttonEl.querySelector('.ios-spinner');
+            if (spinner) spinner.remove();
+        }
     }
 
     /** Копирует обычный текст в буфер обмена */
@@ -453,13 +516,14 @@
                 `<span class="checkbox">${CHECK_SVG}</span>` +
                 `<span class="item-title">${escapeHtml(item.title)}${modalHint}</span>` +
                 (service ? `<span class="service-icon" style="color: ${service.color}">${service.svg}</span>` : '') +
+                `<span class="item-spinner">${spinnerHtml()}</span>` +
                 `<button type="button" class="jump-here-btn">Перейти сюда</button>`;
             li.addEventListener('click', () => {
                 // 'done' — на случай повторного клика в ~0.5с окне до улёта пункта: сама li уже
                 // отмечена выполненной, но замыкание ниже всё ещё держит старый объект item
                 // (state.checklist был заменён новым массивом после markDone), поэтому проверка
                 // item.is_done внутри handleItemClick тут не сработает — нужна проверка по DOM.
-                if (li.classList.contains('locked') || li.classList.contains('done')) return;
+                if (li.classList.contains('locked') || li.classList.contains('done') || li.classList.contains('loading')) return;
                 handleItemClick(item);
             });
             li.querySelector('.jump-here-btn').addEventListener('click', (e) => {
@@ -597,11 +661,16 @@
         );
         if (!confirmed) return;
 
+        // Запрос начинается только после закрытия модалки (кнопка «Удалить» не keepOpen) —
+        // на кнопке уже нет спиннера, поэтому показываем глобальный прелоадер по центру экрана.
+        showGlobalLoader();
         try {
             await apiCall('../api/delete_task.php', { link: task.link });
         } catch (e) {
             // Задача уже отсутствует в БД (например, удалена ранее из другого окна) —
             // всё равно чистим локальный список, чтобы строка не висела вечно.
+        } finally {
+            hideGlobalLoader();
         }
         forgetRecentTask(task.taskId);
         renderRecentTasks();
@@ -807,8 +876,7 @@
                         keepOpen: true, // модалка закрывается вручную через close() только после успешного ответа Jira
                         onClick: async (buttonEl) => {
                             const points = Number(modalBodyEl.querySelector('input[name="story-points"]:checked').value);
-                            buttonEl.disabled = true;
-                            buttonEl.classList.add('btn-loading');
+                            setButtonLoading(buttonEl, true);
                             try {
                                 const data = await apiCall('../api/update_story_points.php', {
                                     task_id: state.task.id,
@@ -820,8 +888,7 @@
                                 closeModal(points);
                             } catch (e) {
                                 showToast(e.message || 'Не удалось обновить Story Points в Jira');
-                                buttonEl.disabled = false;
-                                buttonEl.classList.remove('btn-loading');
+                                setButtonLoading(buttonEl, false);
                             }
                         },
                     },
@@ -861,16 +928,14 @@
                 (bodyEl) => {
                     bodyEl.querySelector('[data-generate-branch-btn]').addEventListener('click', async (e) => {
                         const buttonEl = e.currentTarget;
-                        buttonEl.disabled = true;
-                        buttonEl.classList.add('btn-loading');
+                        setButtonLoading(buttonEl, true);
                         try {
                             const data = await apiCall('../api/generate_branch_name.php', { task_id: state.task.id });
                             bodyEl.querySelector('input').value = data.branch_name;
                         } catch (genError) {
                             showToast(genError.message || 'Не удалось сгенерировать название ветки');
                         } finally {
-                            buttonEl.disabled = false;
-                            buttonEl.classList.remove('btn-loading');
+                            setButtonLoading(buttonEl, false);
                         }
                     });
                     bodyEl.querySelector('[data-copy-branch-btn]').addEventListener('click', async () => {
@@ -929,8 +994,7 @@
                             return;
                         }
 
-                        buttonEl.disabled = true;
-                        buttonEl.classList.add('btn-loading');
+                        setButtonLoading(buttonEl, true);
                         try {
                             const data = await apiCall('../api/generate_commit_message.php', {
                                 description,
@@ -945,8 +1009,7 @@
                         } catch (e) {
                             showToast(e.message || 'Не удалось сгенерировать commit message');
                         } finally {
-                            buttonEl.disabled = false;
-                            buttonEl.classList.remove('btn-loading');
+                            setButtonLoading(buttonEl, false);
                         }
                     });
                 }
@@ -1052,6 +1115,7 @@
         // Перевести задачу в Pull Request — переводит статус задачи в Jira,
         // отметка пункта — только при успешном переходе (см. update_story_points для того же паттерна)
         status_pull_request: async (item) => {
+            setItemLoading(item.id, true);
             try {
                 const data = await apiCall('../api/transition_pull_request.php', {
                     task_id: state.task.id,
@@ -1061,11 +1125,86 @@
                 showToast('Задача переведена в статус Pull request');
             } catch (e) {
                 showToast(e.message || 'Не удалось перевести статус задачи в Jira');
+            } finally {
+                setItemLoading(item.id, false);
             }
         },
 
-        // Затрекать время в Jira — отмечается сразу
-        time_tracking: (item) => markDone(item.id),
+        // Затрекать время — показать сколько уже затрекано, запросить часы/минуты сверх
+        // имеющегося, добавить worklog в Jira, отметка пункта — только при успехе
+        time_tracking: async (item) => {
+            let alreadySpent = 0;
+            setItemLoading(item.id, true);
+            try {
+                const data = await apiCall('../api/get_time_spent.php', { task_id: state.task.id });
+                alreadySpent = data.time_spent_seconds || 0;
+            } catch (e) {
+                showToast(e.message || 'Не удалось получить затреканное время из Jira');
+                return;
+            } finally {
+                setItemLoading(item.id, false);
+            }
+
+            let closeModal = null;
+            await showModal(
+                'Затрекать время',
+                `<div class="snippet">Уже затрекано: <strong>${escapeHtml(formatDuration(alreadySpent))}</strong></div>` +
+                    '<div class="time-tracking-inputs">' +
+                    '<div class="time-tracking-field">' +
+                    '<span class="time-tracking-label">Часы</span>' +
+                    '<div class="stepper">' +
+                    '<button type="button" class="stepper-btn" data-step="-1" aria-label="Уменьшить">−</button>' +
+                    '<input type="number" class="input stepper-input" id="time-hours" min="0" value="0" inputmode="numeric">' +
+                    '<button type="button" class="stepper-btn" data-step="1" aria-label="Увеличить">+</button>' +
+                    '</div></div>' +
+                    '<div class="time-tracking-field">' +
+                    '<span class="time-tracking-label">Минуты</span>' +
+                    '<div class="stepper">' +
+                    '<button type="button" class="stepper-btn" data-step="-5" aria-label="Уменьшить на 5 минут">−</button>' +
+                    // max=55, а не 59: шаг степпера — 5 минут, при max=59 «+» с 55 упирался в 59 (не кратно шагу)
+                    // и следующий «−» давал 54, сбивая всю сетку значений
+                    '<input type="number" class="input stepper-input" id="time-minutes" min="0" max="55" value="0" inputmode="numeric">' +
+                    '<button type="button" class="stepper-btn" data-step="5" aria-label="Увеличить на 5 минут">+</button>' +
+                    '</div></div>' +
+                    '</div>',
+                [
+                    { label: 'Отмена', value: null },
+                    {
+                        label: 'Подтвердить',
+                        primary: true,
+                        keepOpen: true, // модалка закрывается вручную через close() только после успешного ответа Jira
+                        onClick: async (buttonEl) => {
+                            const hours = Math.max(0, parseInt(modalBodyEl.querySelector('#time-hours').value, 10) || 0);
+                            // ручной ввод в поле не ограничен атрибутами min/max (они работают только для степпера) — режем здесь
+                            const minutes = Math.min(55, Math.max(0, parseInt(modalBodyEl.querySelector('#time-minutes').value, 10) || 0));
+                            if (hours === 0 && minutes === 0) {
+                                showToast('Укажите время больше нуля');
+                                return;
+                            }
+                            setButtonLoading(buttonEl, true);
+                            try {
+                                const data = await apiCall('../api/log_time.php', {
+                                    task_id: state.task.id,
+                                    checklist_id: item.id,
+                                    hours,
+                                    minutes,
+                                });
+                                applyChecklistUpdate(data, item.id);
+                                showToast('Время затрекано в Jira');
+                                closeModal(true);
+                            } catch (e) {
+                                showToast(e.message || 'Не удалось затрекать время в Jira');
+                                setButtonLoading(buttonEl, false);
+                            }
+                        },
+                    },
+                ],
+                (bodyEl, close) => {
+                    closeModal = close;
+                    bindSteppers(bodyEl);
+                }
+            );
+        },
 
         // Отправить PR в ЛС — модалка с двумя вариантами копирования, отметка только по «Завершить»
         send_pr: async (item) => {
@@ -1117,13 +1256,11 @@
     async function submitLink() {
         const link = taskLinkInput.value.trim();
         if (!link) return;
-        openTaskBtn.disabled = true;
-        openTaskBtn.classList.add('btn-loading');
+        setButtonLoading(openTaskBtn, true);
         try {
             await loadTask(link);
         } finally {
-            openTaskBtn.disabled = false;
-            openTaskBtn.classList.remove('btn-loading');
+            setButtonLoading(openTaskBtn, false);
         }
     }
 
@@ -1160,7 +1297,9 @@
     const savedLink = localStorage.getItem(TASK_LINK_STORAGE_KEY);
     if (savedLink) {
         linkScreen.classList.add('hidden'); // прячем экран ввода на время подгрузки сохранённой задачи
-        restoreTask(savedLink);
+        // Оба экрана скрыты до ответа Jira — без прелоадера пользователь увидит пустой экран
+        showGlobalLoader();
+        restoreTask(savedLink).finally(hideGlobalLoader);
     } else {
         showLinkScreen();
     }
