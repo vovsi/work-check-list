@@ -1020,7 +1020,7 @@
         },
 
         // Создать PR — 1) скопировать команду `gh pr create`, 2) вставить ссылку на созданный PR;
-        // ссылка сохраняется для пунктов «Проверить PR Claude Code», «Отправить PR в ЛС»
+        // ссылка сохраняется для пунктов «Проверить PR Claude Code», «Отправить PR ревьюверу»
         pull_request: async (item) => {
             const command = buildGhPrCreateCommand();
             const link = await showModal(
@@ -1206,12 +1206,12 @@
             );
         },
 
-        // Отправить PR в ЛС — модалка с двумя вариантами копирования, отметка только по «Завершить»
+        // Отправить PR ревьюверу — модалка с двумя вариантами копирования, отметка только по «Завершить»
         send_pr: async (item) => {
             const link = sessionStorage.getItem(prLinkStorageKey());
             const detailsText = buildDeployDetailsText(state.task.task_id, link);
             const confirmed = await showModal(
-                'Отправить PR в ЛС',
+                'Отправить PR ревьюверу',
                 '<div class="modal-copy-actions">' +
                     '<button type="button" class="btn btn-secondary" data-copy-btn="link">Скопировать Link to PR</button>' +
                     '<button type="button" class="btn btn-secondary" data-copy-btn="details">Скопировать Details template</button>' +

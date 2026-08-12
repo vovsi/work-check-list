@@ -172,7 +172,7 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 | `jira_description` | Оставить описание в Jira | Jira | Показать HTML-текст с форматированием → «Скопировать» копирует (сохраняя стиль через `ClipboardItem`) и отмечает |
 | `status_pull_request` | Перевести задачу в Pull Request | Jira | Переводит задачу в Jira в статус из `config/params.ini` (`atlassian.pull_request_status`, по умолчанию «Pull request») через `api/transition_pull_request.php` → отмечается только при успешном переходе в Jira (тот же паттерн, что у `story_points`/`update_story_points.php`) |
 | `time_tracking` | Затрекать время | Jira | Показать уже затреканное время (`api/get_time_spent.php`, read-only) → запросить часы/минуты сверх имеющегося → добавить worklog в Jira (`api/log_time.php`) → отметить (тот же паттерн, что у `story_points`/`status_pull_request`) |
-| `send_pr` | Отправить PR в ЛС | Telegram | Модалка без текста-превью: кнопки копирования «Скопировать Link to PR» / «Скопировать Details template» (шаблон с `task_id` и ссылкой на PR из шага `pull_request`) в теле окна — не отмечают пункт, можно повторять → «Завершить» в панели действий отмечает |
+| `send_pr` | Отправить PR ревьюверу | Telegram | Модалка без текста-превью: кнопки копирования «Скопировать Link to PR» / «Скопировать Details template» (шаблон с `task_id` и ссылкой на PR из шага `pull_request`) в теле окна — не отмечают пункт, можно повторять → «Завершить» в панели действий отмечает |
 
 Модалки с несколькими действиями следуют единому расположению кнопок: повторяемые действия
 копирования — отдельные кнопки (`.btn` внутри `.modal-copy-actions`) сверху тела модалки;
