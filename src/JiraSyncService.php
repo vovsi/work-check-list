@@ -28,7 +28,12 @@ final class JiraSyncService
         }
 
         return new self(
-            new JiraClient($config['base_url'], $config['email'], $config['api_token']),
+            new JiraClient(
+                $config['base_url'],
+                $config['email'],
+                $config['api_token'],
+                Config::atlassianStoryPointsField()
+            ),
             $tasks
         );
     }
@@ -39,5 +44,10 @@ final class JiraSyncService
         $this->tasks->updateJiraData((int) $task['id'], $issue['title'], $issue['description']);
 
         return $this->tasks->findById((int) $task['id']);
+    }
+
+    public function updateStoryPoints(array $task, int $storyPoints): void
+    {
+        $this->client->updateStoryPoints($task['task_id'], $storyPoints);
     }
 }

@@ -113,6 +113,7 @@
     /** Пункты, клик по которым открывает модальное окно (а не сразу отмечает пункт) — рядом с
      * заголовком таких пунктов рисуется MODAL_HINT_SVG */
     const ITEM_OPENS_MODAL = new Set([
+        'story_points',
         'git_branch',
         'code_written',
         'pull_request',
@@ -693,6 +694,18 @@
         }
     }
 
+    /** Применяет ответ API (task/checklist) к состоянию и запускает анимацию улёта пункта —
+     * общий хвост для markDone() и пунктов с собственным API-эндпоинтом (например Story Points) */
+    function applyChecklistUpdate(data, checklistId) {
+        state.checklist = data.checklist;
+        if (data.task) {
+            state.task = data.task;
+        }
+        renderProgress();
+        renderGitBranch();
+        animateItemCompletion(checklistId);
+    }
+
     /** Отмечает пункт чек-листа выполненным (опционально передаёт доп. данные, например ветку) */
     async function markDone(checklistId, extra = {}) {
         const data = await apiCall('../api/toggle.php', {
@@ -701,13 +714,7 @@
             done: true,
             ...extra,
         });
-        state.checklist = data.checklist;
-        if (data.task) {
-            state.task = data.task;
-        }
-        renderProgress();
-        renderGitBranch();
-        animateItemCompletion(checklistId);
+        applyChecklistUpdate(data, checklistId);
     }
 
     let jumpInProgress = false;
@@ -746,13 +753,58 @@
         }
     }
 
+    /** Варианты Story Points для модалки пункта «Указать Story Points» */
+    const STORY_POINTS_OPTIONS = [
+        { value: 1, description: 'Тривиально, хорошо понятно, никаких неизвестных' },
+        { value: 2, description: 'Просто, всё ясно, есть понятный путь выполнения' },
+        { value: 3, description: 'Средняя сложность, возможно одна неизвестная' },
+        { value: 5, description: 'Сложно, несколько неизвестных или технические сложности' },
+        { value: 8, description: 'Очень сложно, много неизвестных, стоит рассмотреть разбиение на части' },
+        { value: 13, description: 'Слишком большая задача, обязательно нужно разбить на подзадачи' },
+    ];
+
     // ==================== Поведение пунктов чек-листа ====================
     // Ключ — стабильный code пункта (см. Database::CHECKLIST_ITEMS), а не порядковый номер:
     // так добавление/удаление/переупорядочивание пунктов не требует правок здесь.
 
     const ITEM_HANDLERS = {
-        // Story Points указано — отмечается сразу
-        story_points: (item) => markDone(item.id),
+        // Указать Story Points — выбрать значение из шкалы, сохранить его в самой задаче Jira,
+        // отметка пункта — только при успешном обновлении в Jira
+        story_points: async (item) => {
+            const optionsHtml = STORY_POINTS_OPTIONS.map((opt, index) =>
+                `<label class="story-points-option">
+                     <input type="radio" class="story-points-input" name="story-points" value="${opt.value}" ${index === 0 ? 'checked' : ''}>
+                     <span class="story-points-radio">${opt.value}</span>
+                     <span class="story-points-desc">${escapeHtml(opt.description)}</span>
+                 </label>`
+            ).join('');
+
+            const points = await showModal(
+                'Указать Story Points',
+                `<div class="story-points-options">${optionsHtml}</div>`,
+                [
+                    { label: 'Отмена', value: null },
+                    {
+                        label: 'Подтвердить',
+                        primary: true,
+                        getValue: () => Number(modalBodyEl.querySelector('input[name="story-points"]:checked').value),
+                    },
+                ]
+            );
+            if (!points) return;
+
+            try {
+                const data = await apiCall('../api/update_story_points.php', {
+                    task_id: state.task.id,
+                    checklist_id: item.id,
+                    story_points: points,
+                });
+                applyChecklistUpdate(data, item.id);
+                showToast('Story Points в задаче успешно обновлен');
+            } catch (e) {
+                showToast(e.message || 'Не удалось обновить Story Points в Jira');
+            }
+        },
 
         // Статус сменен на Doing — отмечается сразу
         status_doing: (item) => markDone(item.id),

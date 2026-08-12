@@ -851,6 +851,78 @@ html[data-theme="dark"] .checklist-item:hover {
     height: 100%;
 }
 
+/* Список вариантов Story Points в модалке пункта «Указать Story Points» — компактные
+   строки, чтобы все варианты помещались на экран без прокрутки */
+.story-points-options {
+    display: flex;
+    flex-direction: column;
+}
+
+.story-points-option {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 3px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.story-points-option:hover {
+    background: rgba(127, 127, 127, 0.08);
+}
+
+.story-points-option:has(.story-points-input:checked) {
+    background: var(--accent-soft);
+}
+
+/* Нативный input оставлен для доступности/клавиатуры, но визуально скрыт —
+   кружок рисует соседний .story-points-radio через :checked + селектор */
+.story-points-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    margin: 0;
+}
+
+/* Кружок — сам является кликабельным индикатором и одновременно показывает число поинтов */
+.story-points-radio {
+    flex: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(127, 127, 127, 0.14);
+    color: var(--text-primary);
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.story-points-input:checked + .story-points-radio {
+    background: var(--accent);
+    color: #fff;
+    transform: scale(1.12);
+}
+
+.story-points-option:active .story-points-radio {
+    transform: scale(0.92);
+}
+
+.story-points-input:focus-visible + .story-points-radio {
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.story-points-desc {
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    line-height: 1.25;
+}
+
 .modal-actions {
     flex: none;
     display: flex;

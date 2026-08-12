@@ -22,7 +22,7 @@ final class Database
      * существующего пункта не меняется, поэтому уже проставленные галочки не потеряют смысл.
      */
     private const CHECKLIST_ITEMS = [
-        ['code' => 'story_points', 'title' => 'Story Points указано'],
+        ['code' => 'story_points', 'title' => 'Указать Story Points'],
         ['code' => 'status_doing', 'title' => 'Статус сменен на Doing'],
         ['code' => 'git_branch', 'title' => 'Создать ветку в Git'],
         ['code' => 'code_written', 'title' => 'Закоммитить код'],

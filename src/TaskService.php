@@ -88,6 +88,30 @@ final class TaskService
     }
 
     /**
+     * Проставляет Story Points в самой задаче Jira и отмечает пункт чек-листа выполненным.
+     * Пункт отмечается только при успешном обновлении в Jira — без интеграции или при её
+     * ошибке пользователь должен увидеть проблему, а не «выполненный» пункт с неверными данными.
+     */
+    public function updateStoryPoints(int $taskId, int $checklistId, int $storyPoints): array
+    {
+        $task = $this->tasks->findById($taskId);
+        if ($task === null) {
+            throw new RuntimeException('Задача не найдена');
+        }
+        if ($this->jiraSync === null) {
+            throw new RuntimeException('Интеграция с Jira не настроена — заполните config/params.ini');
+        }
+
+        $this->jiraSync->updateStoryPoints($task, $storyPoints);
+        $this->checklist->setDone($taskId, $checklistId, true);
+
+        return [
+            'task' => $task,
+            'checklist' => $this->checklist->getStatusesForTask($taskId),
+        ];
+    }
+
+    /**
      * Полностью удаляет задачу и её чек-лист по ссылке/идентификатору.
      * Возвращает false, если задача не найдена.
      */

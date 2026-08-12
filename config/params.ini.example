@@ -20,3 +20,7 @@ reviewers = "vovsi"
 base_url = "https://your-domain.atlassian.net"
 email = "you@example.com"
 api_token = "your-api-token"
+; ID кастомного поля Story Points (нужно для пункта «Указать Story Points»).
+; Необязательно — по умолчанию customfield_10016 (стандартное поле в большинстве Jira Cloud).
+; Найти свой ID можно через GET /rest/api/2/field.
+story_points_field = "customfield_10016"

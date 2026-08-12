@@ -13,6 +13,7 @@ final class JiraClient
         private readonly string $baseUrl,
         private readonly string $email,
         private readonly string $apiToken,
+        private readonly string $storyPointsFieldId = 'customfield_10016',
     ) {
     }
 
@@ -57,5 +58,35 @@ final class JiraClient
             'title' => (string) ($data['fields']['summary'] ?? ''),
             'description' => $data['renderedFields']['description'] ?? null,
         ];
+    }
+
+    public function updateStoryPoints(string $taskId, int $storyPoints): void
+    {
+        $url = rtrim($this->baseUrl, '/') . '/rest/api/2/issue/' . rawurlencode($taskId);
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => 'PUT',
+            CURLOPT_POSTFIELDS => json_encode(['fields' => [$this->storyPointsFieldId => $storyPoints]]),
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+                'Authorization: Basic ' . base64_encode("{$this->email}:{$this->apiToken}"),
+            ],
+            CURLOPT_TIMEOUT => 20,
+        ]);
+
+        $response = curl_exec($ch);
+        $error = curl_error($ch);
+        $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false) {
+            throw new RuntimeException("Не удалось обратиться к Jira ({$this->baseUrl}): {$error}");
+        }
+        if ($status < 200 || $status >= 300) {
+            throw new RuntimeException("Jira ответила с ошибкой (HTTP {$status}) при обновлении Story Points для задачи {$taskId}");
+        }
     }
 }
