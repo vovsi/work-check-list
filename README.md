@@ -1,4 +1,4 @@
-# work-check-list
+# DevFlow
 
 Single-page checklist app for working with Jira tasks. PHP 8.3 + SQLite, no frameworks.
 

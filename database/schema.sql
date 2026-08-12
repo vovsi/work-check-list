@@ -1,4 +1,4 @@
--- Схема БД Work Check List
+-- Схема БД DevFlow
 
 CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

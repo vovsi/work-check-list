@@ -34,7 +34,7 @@ $assetVersion = static function (string $relativePath): string {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <title>Work Check List</title>
+    <title>DevFlow</title>
     <link rel="stylesheet" href="assets/css/style.css?v=<?= $assetVersion('assets/css/style.css') ?>">
 </head>
 <body>
@@ -58,7 +58,7 @@ $assetVersion = static function (string $relativePath): string {
     <!-- Экран ввода ссылки на задачу -->
     <section id="link-screen" class="screen link-screen">
         <div class="card link-card">
-            <h1 class="app-title">Work Check List</h1>
+            <h1 class="app-title">DevFlow</h1>
             <div class="link-input-row">
                 <input
                     type="text"
@@ -143,7 +143,7 @@ $assetVersion = static function (string $relativePath): string {
 </div>
 
 <script>
-    window.WCL_CONFIG = { githubReviewers: <?= json_encode($githubReviewers, JSON_UNESCAPED_UNICODE) ?> };
+    window.DEVFLOW_CONFIG = { githubReviewers: <?= json_encode($githubReviewers, JSON_UNESCAPED_UNICODE) ?> };
 </script>
 <script src="assets/js/app.js?v=<?= $assetVersion('assets/js/app.js') ?>"></script>
 </body>

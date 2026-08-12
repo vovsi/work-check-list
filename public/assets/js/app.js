@@ -1,4 +1,4 @@
-// Work Check List — вся клиентская логика одностраничного приложения
+// DevFlow — вся клиентская логика одностраничного приложения
 (() => {
     'use strict';
 
@@ -53,7 +53,7 @@
 
     /** Команда `gh pr create` для пункта «Создать PR» — ревьюверы подставляются из config/params.ini (см. Config::githubReviewers) */
     function buildGhPrCreateCommand() {
-        const reviewers = (window.WCL_CONFIG && window.WCL_CONFIG.githubReviewers) || [];
+        const reviewers = (window.DEVFLOW_CONFIG && window.DEVFLOW_CONFIG.githubReviewers) || [];
         let command = 'gh pr create --title "$(git log -1 --format=%s)" --body "$(git log -1 --format=%b)" --assignee "@me"';
         if (reviewers.length > 0) {
             command += ` --reviewer "${reviewers.join(',')}"`;
@@ -196,10 +196,10 @@
     };
 
     /** Ключ localStorage — под ним хранится ссылка последней открытой задачи */
-    const TASK_LINK_STORAGE_KEY = 'wcl_task_link';
+    const TASK_LINK_STORAGE_KEY = 'devflow_task_link';
 
     /** Ключ localStorage и лимит для списка последних открытых задач на экране ввода ссылки */
-    const RECENT_TASKS_STORAGE_KEY = 'wcl_recent_tasks';
+    const RECENT_TASKS_STORAGE_KEY = 'devflow_recent_tasks';
     const RECENT_TASKS_LIMIT = 10;
 
     /** Состояние текущей задачи и чек-листа */
@@ -217,7 +217,7 @@
     }
 
     function prLinkStorageKey() {
-        return `wcl_pr_link_${state.task.id}`;
+        return `devflow_pr_link_${state.task.id}`;
     }
 
     /** Навешивает шаг +/- на кнопки степпера (см. .stepper в style.css) — шаг и границы
@@ -408,11 +408,11 @@
 
     function applyTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
-        localStorage.setItem('wcl_theme', theme);
+        localStorage.setItem('devflow_theme', theme);
     }
 
     function initTheme() {
-        const saved = localStorage.getItem('wcl_theme');
+        const saved = localStorage.getItem('devflow_theme');
         if (saved) {
             applyTheme(saved);
             return;
