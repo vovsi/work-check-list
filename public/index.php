@@ -82,7 +82,7 @@ $assetVersion = static function (string $relativePath): string {
     <!-- Экран задачи с чек-листом -->
     <section id="task-screen" class="screen task-screen hidden">
         <div class="task-header">
-            <div class="task-id" id="task-id-label"></div>
+            <a class="task-id" id="task-id-label" target="_blank" rel="noopener"></a>
             <button id="change-task-btn" class="link-btn" title="Ввести другую задачу">сменить задачу</button>
         </div>
 

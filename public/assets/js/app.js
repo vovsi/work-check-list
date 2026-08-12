@@ -536,6 +536,7 @@
         linkScreen.classList.add('hidden');
         taskScreen.classList.remove('hidden');
         taskIdLabel.textContent = state.task.task_id;
+        taskIdLabel.href = state.task.task_link;
         renderGitBranch();
         renderChecklist();
     }
