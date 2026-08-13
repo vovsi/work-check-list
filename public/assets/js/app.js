@@ -79,6 +79,8 @@
     const gitBranchValue = document.getElementById('git-branch-value');
     const gitActionsBtn = document.getElementById('git-actions-btn');
     const gitActionsPopover = document.getElementById('git-actions-popover');
+    const todayTimeEl = document.getElementById('today-time');
+    const todayTimeValueEl = document.getElementById('today-time-value');
     const settingsBtn = document.getElementById('settings-btn');
     const themePopover = document.getElementById('theme-popover');
     const toastEl = document.getElementById('toast');
@@ -242,6 +244,14 @@
         const minutes = totalMinutes % 60;
         if (hours === 0 && minutes === 0) return '0м';
         return [hours ? `${hours}ч` : '', minutes ? `${minutes}м` : ''].filter(Boolean).join(' ');
+    }
+
+    /** Форматирует секунды как «часы:минуты» (2:05) — вид индикатора затреканного за сегодня времени */
+    function formatClock(totalSeconds) {
+        const totalMinutes = Math.round(totalSeconds / 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        return `${hours}:${String(minutes).padStart(2, '0')}`;
     }
 
     let toastTimer = null;
@@ -1191,6 +1201,7 @@
                                 });
                                 applyChecklistUpdate(data, item.id);
                                 showToast('Время затрекано в Jira');
+                                loadTodayTimeSpent(); // индикатор в шапке должен сразу учесть новый worklog
                                 closeModal(true);
                             } catch (e) {
                                 showToast(e.message || 'Не удалось затрекать время в Jira');
@@ -1290,9 +1301,29 @@
         }
     });
 
+    // ==================== Затреканное сегодня время (шапка) ====================
+
+    /**
+     * Подтягивает суммарно затреканное сегодня в Jira время. Специально не участвует в
+     * цепочке загрузки задачи и ничего не блокирует: индикатор появляется сам, когда Jira
+     * ответит, а при ошибке (нет интеграции, недоступна сеть) просто остаётся скрытым.
+     */
+    async function loadTodayTimeSpent() {
+        todayTimeEl.classList.remove('hidden');
+        todayTimeValueEl.innerHTML = spinnerHtml();
+        try {
+            const data = await apiCall('../api/today_time_spent.php', {});
+            todayTimeValueEl.textContent = formatClock(data.time_spent_seconds || 0);
+        } catch (e) {
+            todayTimeEl.classList.add('hidden');
+            todayTimeValueEl.textContent = '';
+        }
+    }
+
     // ==================== Инициализация ====================
 
     initTheme();
+    loadTodayTimeSpent();
 
     const savedLink = localStorage.getItem(TASK_LINK_STORAGE_KEY);
     if (savedLink) {

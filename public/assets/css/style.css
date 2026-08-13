@@ -55,6 +55,38 @@ body {
     display: none !important;
 }
 
+/* ==================== Затреканное сегодня время (левый верхний угол) ==================== */
+
+.today-time {
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    height: 30px;
+    padding: 0 11px;
+    border-radius: 15px;
+    border: 1px solid var(--surface-border);
+    background: var(--surface);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: var(--shadow);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12.5px;
+    font-variant-numeric: tabular-nums;
+    z-index: 20;
+}
+
+/* Пока идёт запрос к Jira — на месте значения крутится спиннер; ширина держится,
+   чтобы пилюля не «прыгала» при появлении времени */
+.today-time #today-time-value {
+    min-width: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
 /* ==================== Иконка настроек и попап темы ==================== */
 
 .icon-btn {

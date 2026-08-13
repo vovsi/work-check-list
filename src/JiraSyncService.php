@@ -62,6 +62,12 @@ final class JiraSyncService
         return $this->client->fetchTimeSpentSeconds($task['task_id']);
     }
 
+    /** Суммарно затреканное сегодня время по всем задачам — не привязано к конкретной задаче */
+    public function getTodayTimeSpentSeconds(): int
+    {
+        return $this->client->fetchTodayTimeSpentSeconds();
+    }
+
     public function addWorklog(array $task, int $seconds): void
     {
         $this->client->addWorklog($task['task_id'], $seconds);

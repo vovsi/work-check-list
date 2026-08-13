@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace App;
 
+use DateTimeImmutable;
+use DateTimeZone;
+use Exception;
 use RuntimeException;
 
 /** Читает и обновляет данные задачи в Atlassian Jira REST API v2 (Basic Auth email + API token) */
@@ -97,6 +100,65 @@ final class JiraClient
         );
 
         return (int) ($data['fields']['timespent'] ?? 0);
+    }
+
+    /**
+     * Сколько времени текущий пользователь суммарно затрекал сегодня во все задачи Jira.
+     * «Сегодня» считается в таймзоне пользователя Jira (её же имеет в виду startOfDay() в JQL),
+     * а не сервера — контейнер живёт в UTC и на границах суток давал бы сдвиг.
+     */
+    public function fetchTodayTimeSpentSeconds(): int
+    {
+        $me = $this->request('GET', '/rest/api/2/myself', null, 'при получении текущего пользователя');
+        $accountId = (string) ($me['accountId'] ?? '');
+
+        try {
+            $timezone = new DateTimeZone((string) ($me['timeZone'] ?? 'UTC'));
+        } catch (Exception $e) {
+            $timezone = new DateTimeZone('UTC');
+        }
+        $dayStart = (new DateTimeImmutable('today', $timezone))->getTimestamp();
+        $dayEnd = (new DateTimeImmutable('tomorrow', $timezone))->getTimestamp();
+
+        // На Jira Cloud старый /rest/api/2/search удалён (HTTP 410) — актуальный поиск это /search/jql.
+        // За одни сутки задач с ворклогом заведомо меньше 50, поэтому пагинация не нужна.
+        $jql = rawurlencode('worklogAuthor = currentUser() AND worklogDate >= startOfDay()');
+        $search = $this->request(
+            'GET',
+            "/rest/api/2/search/jql?jql={$jql}&fields=key&maxResults=50",
+            null,
+            'при поиске задач с сегодняшним ворклогом'
+        );
+
+        $total = 0;
+        foreach (($search['issues'] ?? []) as $issue) {
+            $key = (string) ($issue['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+
+            $data = $this->request(
+                'GET',
+                '/rest/api/2/issue/' . rawurlencode($key) . '/worklog?startedAfter=' . ($dayStart * 1000),
+                null,
+                "при получении ворклогов задачи {$key}"
+            );
+
+            foreach (($data['worklogs'] ?? []) as $worklog) {
+                // В задаче есть ворклоги и других участников — считаем только свои
+                if ((string) ($worklog['author']['accountId'] ?? '') !== $accountId) {
+                    continue;
+                }
+                // startedAfter отсекает только нижнюю границу суток, верхнюю проверяем сами
+                $started = strtotime((string) ($worklog['started'] ?? ''));
+                if ($started === false || $started < $dayStart || $started >= $dayEnd) {
+                    continue;
+                }
+                $total += (int) ($worklog['timeSpentSeconds'] ?? 0);
+            }
+        }
+
+        return $total;
     }
 
     /** Добавляет worklog (доп. время сверх уже затреканного) к задаче */

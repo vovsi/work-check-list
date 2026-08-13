@@ -39,6 +39,15 @@ $assetVersion = static function (string $relativePath): string {
 </head>
 <body>
 
+<!-- Затреканное сегодня время во всех задачах Jira (подгружается отдельно от страницы) -->
+<div id="today-time" class="today-time hidden" title="Затрекано сегодня во всех задачах Jira">
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M12 7v5l3.2 2"/>
+    </svg>
+    <span id="today-time-value"></span>
+</div>
+
 <!-- Иконка настроек -->
 <button id="settings-btn" class="icon-btn settings-btn" title="Настройки" aria-label="Настройки">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7">
