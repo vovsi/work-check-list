@@ -84,6 +84,7 @@
     const settingsBtn = document.getElementById('settings-btn');
     const themePopover = document.getElementById('theme-popover');
     const toastEl = document.getElementById('toast');
+    const tooltipEl = document.getElementById('tooltip');
     const modalOverlay = document.getElementById('modal-overlay');
     const modalTitleEl = document.getElementById('modal-title');
     const modalBodyEl = document.getElementById('modal-body');
@@ -197,6 +198,11 @@
         send_pr: 'telegram',
     };
 
+    /** Минимальный интервал между перезапросами затреканного сегодня времени при возврате к окну */
+    const TODAY_TIME_REFRESH_MS = 60 * 1000;
+    let todayTimeLoadedAt = 0;
+    let todayTimeLoading = false;
+
     /** Ключ localStorage — под ним хранится ссылка последней открытой задачи */
     const TASK_LINK_STORAGE_KEY = 'devflow_task_link';
 
@@ -253,6 +259,76 @@
         const minutes = totalMinutes % 60;
         return `${hours}:${String(minutes).padStart(2, '0')}`;
     }
+
+    /** «Сколько времени назад» для подсказки индикатора затреканного времени (сокращённо: 4 мин / 2 ч) */
+    function formatAgo(timestamp) {
+        const minutes = Math.floor((Date.now() - timestamp) / 60000);
+        if (minutes < 1) return 'только что';
+        if (minutes < 60) return `${minutes} мин назад`;
+        return `${Math.floor(minutes / 60)} ч назад`;
+    }
+
+    // ==================== Подсказки (data-tooltip) ====================
+
+    /** Задержка перед показом — как в macOS: короткое наведение мышью подсказку не вызывает */
+    const TOOLTIP_DELAY_MS = 400;
+    let tooltipTimer = null;
+    let tooltipTarget = null;
+
+    function positionTooltip(el) {
+        const rect = el.getBoundingClientRect();
+        // offsetWidth/Height, а не getBoundingClientRect: у скрытой подсказки есть transform
+        // (scale появления), и rect отдал бы уменьшенный размер — подсказку сместило бы вбок
+        const tipWidth = tooltipEl.offsetWidth;
+        const tipHeight = tooltipEl.offsetHeight;
+        const margin = 8;
+
+        // Обычно под элементом; если снизу не помещается (окно всего 500×500) — над ним
+        let top = rect.bottom + 6;
+        if (top + tipHeight + margin > window.innerHeight) {
+            top = rect.top - tipHeight - 6;
+        }
+        const left = Math.min(
+            Math.max(margin, rect.left + rect.width / 2 - tipWidth / 2),
+            window.innerWidth - tipWidth - margin
+        );
+
+        tooltipEl.style.top = `${Math.max(margin, top)}px`;
+        tooltipEl.style.left = `${left}px`;
+    }
+
+    /** Текст читается в момент показа, а не наведения — так подсказка может быть динамической
+     * (например «обновлено 4 мин назад» у индикатора затреканного времени) */
+    function showTooltip(el) {
+        const text = el.dataset.tooltip;
+        if (!text) return;
+        tooltipEl.textContent = text;
+        positionTooltip(el);
+        tooltipEl.classList.add('visible');
+        tooltipTarget = el;
+    }
+
+    function hideTooltip() {
+        clearTimeout(tooltipTimer);
+        tooltipTarget = null;
+        tooltipEl.classList.remove('visible');
+    }
+
+    // Делегирование на document: подсказка появляется у любого элемента с data-tooltip,
+    // в том числе у отрисованных динамически (строки «Последних задач», пункты чек-листа)
+    document.addEventListener('mouseover', (e) => {
+        const el = e.target.closest('[data-tooltip]');
+        if (!el || el === tooltipTarget) return;
+        hideTooltip();
+        tooltipTimer = setTimeout(() => showTooltip(el), TOOLTIP_DELAY_MS);
+    });
+
+    document.addEventListener('mouseout', (e) => {
+        if (e.target.closest('[data-tooltip]')) hideTooltip();
+    });
+
+    // После клика подсказка мешает результату действия (и может устареть) — убираем сразу
+    document.addEventListener('click', hideTooltip);
 
     let toastTimer = null;
 
@@ -520,7 +596,7 @@
                 li.style.setProperty('--service-color', service.color);
             }
             const modalHint = ITEM_OPENS_MODAL.has(item.code)
-                ? `<span class="modal-hint-icon" title="Открывает окно">${MODAL_HINT_SVG}</span>`
+                ? `<span class="modal-hint-icon" data-tooltip="Открывает окно">${MODAL_HINT_SVG}</span>`
                 : '';
             li.innerHTML =
                 `<span class="checkbox">${CHECK_SVG}</span>` +
@@ -722,7 +798,7 @@
             const deleteBtn = document.createElement('button');
             deleteBtn.type = 'button';
             deleteBtn.className = 'recent-task-delete';
-            deleteBtn.title = 'Удалить задачу';
+            deleteBtn.dataset.tooltip = 'Удалить задачу';
             deleteBtn.setAttribute('aria-label', 'Удалить задачу');
             deleteBtn.innerHTML = TRASH_ICON_SVG;
             deleteBtn.addEventListener('click', () => deleteRecentTask(task));
@@ -1309,6 +1385,9 @@
      * ответит, а при ошибке (нет интеграции, недоступна сеть) просто остаётся скрытым.
      */
     async function loadTodayTimeSpent() {
+        if (todayTimeLoading) return;
+        todayTimeLoading = true;
+        todayTimeLoadedAt = Date.now();
         todayTimeEl.classList.remove('hidden');
         todayTimeValueEl.innerHTML = spinnerHtml();
         try {
@@ -1317,8 +1396,33 @@
         } catch (e) {
             todayTimeEl.classList.add('hidden');
             todayTimeValueEl.textContent = '';
+        } finally {
+            todayTimeLoading = false;
         }
     }
+
+    /** Возврат к окну — момент «я вернулся из Jira, где мог затрекать время руками»,
+     * но переключаются между окнами часто, а время в Jira так часто не меняется:
+     * повторный запрос не чаще раза в TODAY_TIME_REFRESH_MS */
+    function refreshTodayTimeSpentOnReturn() {
+        if (document.visibilityState !== 'visible') return;
+        if (Date.now() - todayTimeLoadedAt < TODAY_TIME_REFRESH_MS) return;
+        loadTodayTimeSpent();
+    }
+
+    // Оба события нужны: visibilitychange ловит возврат к свёрнутому окну/неактивной вкладке,
+    // а focus — переход в другое приложение (окно при этом остаётся visible, и visibilitychange молчит)
+    document.addEventListener('visibilitychange', refreshTodayTimeSpentOnReturn);
+    window.addEventListener('focus', refreshTodayTimeSpentOnReturn);
+
+    // Клик по самому индикатору — явный запрос пользователя, поэтому идёт мимо троттлинга
+    todayTimeEl.addEventListener('click', () => loadTodayTimeSpent());
+
+    // Давность обновления пересчитывается в момент наведения — так подсказка всегда свежая
+    // и не нужен таймер, тикающий в фоне ради текста, который почти никто не смотрит
+    todayTimeEl.addEventListener('mouseenter', () => {
+        todayTimeEl.dataset.tooltip = `Затрекано времени (обновлено ${formatAgo(todayTimeLoadedAt)})`;
+    });
 
     // ==================== Инициализация ====================
 

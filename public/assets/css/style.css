@@ -4,6 +4,9 @@
     --accent: #0a84ff;
     --accent-soft: rgba(10, 132, 255, 0.14);
     --success: #29bd4e;
+    --danger: #d9483f;
+    --danger-soft: rgba(217, 72, 63, 0.12);
+    --danger-border: rgba(217, 72, 63, 0.22);
 
     --bg-from: #eef1f6;
     --bg-to: #dde3ee;
@@ -16,6 +19,8 @@
     --checkbox-border: rgba(60, 60, 67, 0.32);
     --shadow: 0 20px 60px rgba(31, 38, 55, 0.14), 0 2px 8px rgba(31, 38, 55, 0.06);
     --divider: rgba(60, 60, 67, 0.1);
+    /* Подсказка плотнее обычной поверхности — мелкий текст поверх любого фона должен читаться */
+    --tooltip-bg: rgba(255, 255, 255, 0.88);
 }
 
 html[data-theme="dark"] {
@@ -30,6 +35,10 @@ html[data-theme="dark"] {
     --checkbox-border: rgba(235, 235, 245, 0.32);
     --shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
     --divider: rgba(235, 235, 245, 0.1);
+    --tooltip-bg: rgba(58, 58, 62, 0.88);
+    --danger: #ff6b60;
+    --danger-soft: rgba(255, 107, 96, 0.16);
+    --danger-border: rgba(255, 107, 96, 0.26);
 }
 
 * {
@@ -55,6 +64,38 @@ body {
     display: none !important;
 }
 
+/* ==================== Подсказки (единственный вид тултипа в приложении) ====================
+   Нативный title не используем нигде: он не стилизуется, всплывает с системной задержкой и
+   выбивается из оформления. Вместо него — атрибут data-tooltip на элементе и этот стеклянный
+   тултип, показываемый общим делегатом в app.js. */
+.tooltip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 60;
+    max-width: 220px;
+    padding: 6px 10px;
+    border-radius: 11px;
+    border: 1px solid var(--surface-border);
+    background: var(--tooltip-bg);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    box-shadow: var(--shadow);
+    color: var(--text-primary);
+    font-size: 11.5px;
+    line-height: 1.35;
+    text-align: center;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-3px) scale(0.96);
+    transition: opacity 0.16s ease, transform 0.16s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.tooltip.visible {
+    opacity: 1;
+    transform: none;
+}
+
 /* ==================== Затреканное сегодня время (левый верхний угол) ==================== */
 
 .today-time {
@@ -73,9 +114,16 @@ body {
     display: flex;
     align-items: center;
     gap: 5px;
+    font-family: inherit;
     font-size: 12.5px;
     font-variant-numeric: tabular-nums;
+    cursor: pointer;
     z-index: 20;
+    transition: color 0.15s ease;
+}
+
+.today-time:hover {
+    color: var(--text-primary);
 }
 
 /* Пока идёт запрос к Jira — на месте значения крутится спиннер; ширина держится,
@@ -858,9 +906,19 @@ html[data-theme="dark"] .checklist-item:hover {
     color: var(--text-primary);
 }
 
+/* Сброс чек-листа — действие деструктивное, но не главное на экране: приглушённый
+   красный tint (в духе iOS destructive), чтобы кнопка не перетягивала внимание с пунктов */
 .finish-btn {
     width: 100%;
     max-width: 420px;
+    background: var(--danger-soft);
+    border: 1px solid var(--danger-border);
+    color: var(--danger);
+}
+
+.finish-btn:hover {
+    background: var(--danger-border);
+    opacity: 1;
 }
 
 /* ==================== Футер с git branch ==================== */

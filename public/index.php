@@ -40,16 +40,16 @@ $assetVersion = static function (string $relativePath): string {
 <body>
 
 <!-- Затреканное сегодня время во всех задачах Jira (подгружается отдельно от страницы) -->
-<div id="today-time" class="today-time hidden" title="Затрекано сегодня во всех задачах Jira">
+<button type="button" id="today-time" class="today-time hidden" data-tooltip="Затрекано времени" aria-label="Затреканное сегодня время">
     <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="9"/>
         <path d="M12 7v5l3.2 2"/>
     </svg>
     <span id="today-time-value"></span>
-</div>
+</button>
 
 <!-- Иконка настроек -->
-<button id="settings-btn" class="icon-btn settings-btn" title="Настройки" aria-label="Настройки">
+<button id="settings-btn" class="icon-btn settings-btn" data-tooltip="Настройки" aria-label="Настройки">
     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7">
         <circle cx="12" cy="12" r="3.2"/>
         <path d="M19.4 13a7.6 7.6 0 0 0 .1-1 7.6 7.6 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a7.4 7.4 0 0 0-1.7-1L15 3h-4l-.3 2.6a7.4 7.4 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1a7.4 7.4 0 0 0 1.7 1L11 21h4l.3-2.6a7.4 7.4 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6Z"/>
@@ -92,7 +92,7 @@ $assetVersion = static function (string $relativePath): string {
     <section id="task-screen" class="screen task-screen hidden">
         <div class="task-header">
             <a class="task-id" id="task-id-label" target="_blank" rel="noopener"></a>
-            <button id="change-task-btn" class="link-btn" title="Ввести другую задачу">сменить задачу</button>
+            <button id="change-task-btn" class="link-btn" data-tooltip="Ввести другую задачу">сменить задачу</button>
         </div>
 
         <!-- Прогресс выполнения чек-листа -->
@@ -105,12 +105,12 @@ $assetVersion = static function (string $relativePath): string {
 
         <ul id="checklist" class="checklist"></ul>
 
-        <button id="finish-task-btn" class="btn btn-primary finish-btn">Начать заново</button>
+        <button id="finish-task-btn" class="btn finish-btn">Начать заново</button>
 
         <div class="git-branch-footer" id="git-branch-footer">
-            <button id="git-branch-value" class="branch-pill hidden" title="Скопировать ветку"></button>
+            <button id="git-branch-value" class="branch-pill hidden" data-tooltip="Скопировать ветку" aria-label="Скопировать ветку"></button>
             <div class="git-icon-wrap">
-                <button id="git-actions-btn" class="git-icon-btn hidden" title="Git команды" aria-label="Git команды">
+                <button id="git-actions-btn" class="git-icon-btn hidden" data-tooltip="Git команды" aria-label="Git команды">
                     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <circle cx="6" cy="6" r="2.2"/>
                         <circle cx="6" cy="18" r="2.2"/>
@@ -142,6 +142,9 @@ $assetVersion = static function (string $relativePath): string {
 
 <!-- Всплывающее уведомление (например «Скопировано») -->
 <div id="toast" class="toast"></div>
+
+<!-- Единственная подсказка приложения — показывается у любого элемента с data-tooltip (см. app.js) -->
+<div id="tooltip" class="tooltip" role="tooltip"></div>
 
 <!-- Глобальный прелоадер по центру экрана — для запросов, которые начинаются уже после
      закрытия модалки (см. CLAUDE.md, раздел «Индикация загрузки») -->
