@@ -10,12 +10,15 @@ header('Cache-Control: no-cache, no-store, must-revalidate');
 header('Pragma: no-cache');
 header('Expires: 0');
 
-// Конфиг ревьюверов не обязателен для запуска приложения (см. README) — при отсутствии
-// config/params.ini страница всё равно должна открыться, просто без --reviewer в команде gh.
+// Конфиг не обязателен для запуска приложения (см. README) — при отсутствии config/params.ini
+// страница всё равно должна открыться: просто без --reviewer в команде gh и с рабочим днём
+// по умолчанию у ползунка быстрого трека времени.
 try {
     $githubReviewers = Config::githubReviewers();
+    $workTime = Config::workTime();
 } catch (\Throwable $e) {
     $githubReviewers = [];
+    $workTime = Config::WORK_TIME_DEFAULTS;
 }
 
 // Версия статики = время последнего изменения файла: при каждой правке CSS/JS
@@ -39,14 +42,24 @@ $assetVersion = static function (string $relativePath): string {
 </head>
 <body>
 
-<!-- Затреканное сегодня время во всех задачах Jira (подгружается отдельно от страницы) -->
-<button type="button" id="today-time" class="today-time hidden" data-tooltip="Затрекано времени" aria-label="Затреканное сегодня время">
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="9"/>
-        <path d="M12 7v5l3.2 2"/>
-    </svg>
-    <span id="today-time-value"></span>
-</button>
+<!-- Затреканное сегодня время во всех задачах Jira (подгружается отдельно от страницы) и
+     кружок быстрого трека времени, всплывающий правее по наведению (только когда открыта задача) -->
+<div class="today-time-group">
+    <button type="button" id="today-time" class="today-time hidden" data-tooltip="Затрекано времени" aria-label="Затреканное сегодня время">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 7v5l3.2 2"/>
+        </svg>
+        <span id="today-time-value"></span>
+    </button>
+    <button type="button" id="track-time-btn" class="track-time-btn" data-tooltip="Затрекать время" aria-label="Затрекать время">
+        <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="10.5" cy="13.5" r="7.5"/>
+            <path d="M10.5 9.6v3.9l2.8 1.7"/>
+            <path d="M19 2.5v6M16 5.5h6"/>
+        </svg>
+    </button>
+</div>
 
 <!-- Иконка настроек -->
 <button id="settings-btn" class="icon-btn settings-btn" data-tooltip="Настройки" aria-label="Настройки">
@@ -155,7 +168,10 @@ $assetVersion = static function (string $relativePath): string {
 </div>
 
 <script>
-    window.DEVFLOW_CONFIG = { githubReviewers: <?= json_encode($githubReviewers, JSON_UNESCAPED_UNICODE) ?> };
+    window.DEVFLOW_CONFIG = {
+        githubReviewers: <?= json_encode($githubReviewers, JSON_UNESCAPED_UNICODE) ?>,
+        workTime: <?= json_encode($workTime, JSON_UNESCAPED_UNICODE) ?>
+    };
 </script>
 <script src="assets/js/app.js?v=<?= $assetVersion('assets/js/app.js') ?>"></script>
 </body>

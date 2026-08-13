@@ -83,3 +83,22 @@ GitHub CLI installed and authenticated on your machine:
 brew install gh
 gh auth login
 ```
+
+## Work day config (quick time tracking)
+
+Hovering the "time spent today" pill (top-left) reveals a circle button that opens a slider for
+logging time into the current task. The slider spans your work day and highlights today's total
+against your daily norm — set them in `config/params.ini`:
+
+```ini
+[worktime]
+start = "09:00"
+end = "18:00"
+daily_hours = 8
+lunch_start = "12:00"
+lunch_end = "13:00"
+```
+
+Optional — defaults are 09:00, 18:00, 8 hours and a 12:00–13:00 lunch break. The lunch break is
+highlighted in orange on the slider and never counted into the logged time; a break outside the
+work day bounds is simply ignored.

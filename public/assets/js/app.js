@@ -81,6 +81,7 @@
     const gitActionsPopover = document.getElementById('git-actions-popover');
     const todayTimeEl = document.getElementById('today-time');
     const todayTimeValueEl = document.getElementById('today-time-value');
+    const trackTimeBtn = document.getElementById('track-time-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const themePopover = document.getElementById('theme-popover');
     const toastEl = document.getElementById('toast');
@@ -203,6 +204,17 @@
     let todayTimeLoadedAt = 0;
     let todayTimeLoading = false;
 
+    /** Рабочий день и норма часов для ползунка быстрого трека (config/params.ini, секция [worktime]) */
+    const WORK_TIME = (window.DEVFLOW_CONFIG && window.DEVFLOW_CONFIG.workTime) ||
+        { start: '09:00', end: '18:00', daily_hours: 8 };
+
+    /** Шаг ползунка трека времени, минуты */
+    const TRACK_STEP_MINUTES = 10;
+
+    /** Диаметр бегунка — должен совпадать с .worktime-range::-webkit-slider-thumb в style.css:
+     * по нему считается позиция пузырька над бегунком (бегунок не выезжает за края трека) */
+    const TRACK_THUMB_SIZE = 26;
+
     /** Ключ localStorage — под ним хранится ссылка последней открытой задачи */
     const TASK_LINK_STORAGE_KEY = 'devflow_task_link';
 
@@ -228,21 +240,6 @@
         return `devflow_pr_link_${state.task.id}`;
     }
 
-    /** Навешивает шаг +/- на кнопки степпера (см. .stepper в style.css) — шаг и границы
-     * берутся из data-step кнопки и min/max соседнего input внутри того же .stepper */
-    function bindSteppers(rootEl) {
-        rootEl.querySelectorAll('.stepper-btn').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const input = btn.closest('.stepper').querySelector('input[type="number"]');
-                const step = Number(btn.dataset.step);
-                const min = input.min !== '' ? Number(input.min) : -Infinity;
-                const max = input.max !== '' ? Number(input.max) : Infinity;
-                const next = Math.min(max, Math.max(min, (parseInt(input.value, 10) || 0) + step));
-                input.value = next;
-            });
-        });
-    }
-
     /** Форматирует секунды в компактную строку «Хч Ум» для отображения затреканного времени */
     function formatDuration(totalSeconds) {
         const totalMinutes = Math.round(totalSeconds / 60);
@@ -258,6 +255,34 @@
         const hours = Math.floor(totalMinutes / 60);
         const minutes = totalMinutes % 60;
         return `${hours}:${String(minutes).padStart(2, '0')}`;
+    }
+
+    /** Форматирует секунды как «3 часа 25 мин» — вид итога в модалке быстрого трека */
+    function formatHoursMinutes(totalSeconds) {
+        const totalMinutes = Math.round(totalSeconds / 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        const hoursWord = (n) => {
+            const tail = n % 100 >= 11 && n % 100 <= 14 ? 0 : n % 10;
+            if (tail === 1) return 'час';
+            return tail >= 2 && tail <= 4 ? 'часа' : 'часов';
+        };
+        if (hours === 0) return `${minutes} мин`;
+        return minutes === 0
+            ? `${hours} ${hoursWord(hours)}`
+            : `${hours} ${hoursWord(hours)} ${minutes} мин`;
+    }
+
+    /** «HH:MM» → минуты с начала суток (границы рабочего дня приходят из конфига строкой) */
+    function parseClock(value) {
+        const [hours, minutes] = String(value).split(':').map(Number);
+        return (hours || 0) * 60 + (minutes || 0);
+    }
+
+    /** Минуты с начала суток → «16:00» (время дня, в отличие от formatClock — длительности) */
+    function formatTimeOfDay(totalMinutes) {
+        const hours = Math.floor(totalMinutes / 60);
+        return `${String(hours).padStart(2, '0')}:${String(totalMinutes % 60).padStart(2, '0')}`;
     }
 
     /** «Сколько времени назад» для подсказки индикатора затреканного времени (сокращённо: 4 мин / 2 ч) */
@@ -686,6 +711,7 @@
         taskIdLabel.href = state.task.task_link;
         renderGitBranch();
         renderChecklist();
+        updateTrackTimeAvailability(); // быстрый трек времени доступен только внутри задачи
     }
 
     function showLinkScreen() {
@@ -697,6 +723,7 @@
         taskLinkInput.value = '';
         taskLinkInput.focus();
         renderRecentTasks();
+        updateTrackTimeAvailability();
     }
 
     // ==================== Последние открытые задачи (экран ввода ссылки) ====================
@@ -1058,7 +1085,7 @@
 
         // Закоммитить код — ввести описание, сгенерировать Commit Message нейронкой (копируется
         // в буфер сразу по готовности, кнопку можно нажимать повторно), отметка пункта —
-        // только отдельной кнопкой «Завершить»
+        // только отдельной кнопкой «Закоммитил и Запушил»
         code_written: async (item) => {
             const confirmed = await showModal(
                 'Закоммитить код',
@@ -1069,7 +1096,7 @@
                     '<div class="snippet hidden" id="commit-message-result"></div>',
                 [
                     { label: 'Отмена', value: false },
-                    { label: 'Завершить', primary: true, value: true },
+                    { label: 'Закоммитил и Запушил', primary: true, value: true },
                 ],
                 (bodyEl) => {
                     bodyEl.querySelector('[data-generate-btn]').addEventListener('click', async (e) => {
@@ -1100,9 +1127,23 @@
                     });
                 }
             );
-            if (confirmed) {
-                await markDone(item.id);
+            if (!confirmed) {
+                return;
             }
+
+            // Одна задача может затрагивать несколько репозиториев — если проект ещё есть,
+            // пункт остаётся невыполненным и цикл «описание → commit message → пуш» повторяется
+            // с него же. Откатывать ничего не нужно: отметка ещё не проставлена.
+            const hasMoreProjects = await showModal('Есть ещё один проект?', '', [
+                { label: 'Нет', value: false },
+                { label: 'Да', primary: true, value: true },
+            ]);
+            if (hasMoreProjects === true) {
+                showToast('Закоммитьте код в следующем проекте');
+                return;
+            }
+
+            await markDone(item.id);
         },
 
         // Создать PR — 1) скопировать команду `gh pr create`, 2) вставить ссылку на созданный PR;
@@ -1219,11 +1260,19 @@
         // Затрекать время — показать сколько уже затрекано, запросить часы/минуты сверх
         // имеющегося, добавить worklog в Jira, отметка пункта — только при успехе
         time_tracking: async (item) => {
-            let alreadySpent = 0;
+            // Ползунок строится на затреканном за сегодня (по всем задачам), а строкой над ним
+            // показывается затреканное именно в эту задачу — оба числа нужны сразу
+            let todaySeconds = 0;
+            let taskSeconds = 0;
             setItemLoading(item.id, true);
             try {
-                const data = await apiCall('../api/get_time_spent.php', { task_id: state.task.id });
-                alreadySpent = data.time_spent_seconds || 0;
+                const [today, task] = await Promise.all([
+                    apiCall('../api/today_time_spent.php', {}),
+                    apiCall('../api/get_time_spent.php', { task_id: state.task.id }),
+                ]);
+                todaySeconds = today.time_spent_seconds || 0;
+                taskSeconds = task.time_spent_seconds || 0;
+                applyTodayTimeSpent(todaySeconds);
             } catch (e) {
                 showToast(e.message || 'Не удалось получить затреканное время из Jira');
                 return;
@@ -1231,66 +1280,21 @@
                 setItemLoading(item.id, false);
             }
 
-            let closeModal = null;
-            await showModal(
-                'Затрекать время',
-                `<div class="snippet">Уже затрекано: <strong>${escapeHtml(formatDuration(alreadySpent))}</strong></div>` +
-                    '<div class="time-tracking-inputs">' +
-                    '<div class="time-tracking-field">' +
-                    '<span class="time-tracking-label">Часы</span>' +
-                    '<div class="stepper">' +
-                    '<button type="button" class="stepper-btn" data-step="-1" aria-label="Уменьшить">−</button>' +
-                    '<input type="number" class="input stepper-input" id="time-hours" min="0" value="0" inputmode="numeric">' +
-                    '<button type="button" class="stepper-btn" data-step="1" aria-label="Увеличить">+</button>' +
-                    '</div></div>' +
-                    '<div class="time-tracking-field">' +
-                    '<span class="time-tracking-label">Минуты</span>' +
-                    '<div class="stepper">' +
-                    '<button type="button" class="stepper-btn" data-step="-5" aria-label="Уменьшить на 5 минут">−</button>' +
-                    // max=55, а не 59: шаг степпера — 5 минут, при max=59 «+» с 55 упирался в 59 (не кратно шагу)
-                    // и следующий «−» давал 54, сбивая всю сетку значений
-                    '<input type="number" class="input stepper-input" id="time-minutes" min="0" max="55" value="0" inputmode="numeric">' +
-                    '<button type="button" class="stepper-btn" data-step="5" aria-label="Увеличить на 5 минут">+</button>' +
-                    '</div></div>' +
-                    '</div>',
-                [
-                    { label: 'Отмена', value: null },
-                    {
-                        label: 'Подтвердить',
-                        primary: true,
-                        keepOpen: true, // модалка закрывается вручную через close() только после успешного ответа Jira
-                        onClick: async (buttonEl) => {
-                            const hours = Math.max(0, parseInt(modalBodyEl.querySelector('#time-hours').value, 10) || 0);
-                            // ручной ввод в поле не ограничен атрибутами min/max (они работают только для степпера) — режем здесь
-                            const minutes = Math.min(55, Math.max(0, parseInt(modalBodyEl.querySelector('#time-minutes').value, 10) || 0));
-                            if (hours === 0 && minutes === 0) {
-                                showToast('Укажите время больше нуля');
-                                return;
-                            }
-                            setButtonLoading(buttonEl, true);
-                            try {
-                                const data = await apiCall('../api/log_time.php', {
-                                    task_id: state.task.id,
-                                    checklist_id: item.id,
-                                    hours,
-                                    minutes,
-                                });
-                                applyChecklistUpdate(data, item.id);
-                                showToast('Время затрекано в Jira');
-                                loadTodayTimeSpent(); // индикатор в шапке должен сразу учесть новый worklog
-                                closeModal(true);
-                            } catch (e) {
-                                showToast(e.message || 'Не удалось затрекать время в Jira');
-                                setButtonLoading(buttonEl, false);
-                            }
-                        },
-                    },
-                ],
-                (bodyEl, close) => {
-                    closeModal = close;
-                    bindSteppers(bodyEl);
-                }
-            );
+            await openQuickTrackModal(todaySeconds, {
+                noteHtml:
+                    '<div class="snippet">Уже затрекано в задачу: ' +
+                    `<strong>${escapeHtml(formatDuration(taskSeconds))}</strong></div>`,
+                submit: async (minutes) => {
+                    const data = await apiCall('../api/log_time.php', {
+                        task_id: state.task.id,
+                        checklist_id: item.id,
+                        hours: Math.floor(minutes / 60),
+                        minutes: minutes % 60,
+                    });
+                    applyChecklistUpdate(data, item.id);
+                    showToast('Время затрекано в Jira');
+                },
+            });
         },
 
         // Отправить PR ревьюверу — модалка с двумя вариантами копирования, отметка только по «Завершить»
@@ -1379,6 +1383,15 @@
 
     // ==================== Затреканное сегодня время (шапка) ====================
 
+    /** Единая точка применения свежего значения к индикатору — им пользуются и обычная
+     * подгрузка, и быстрый трек времени (оба получают из Jira одно и то же число) */
+    function applyTodayTimeSpent(seconds) {
+        todayTimeLoadedAt = Date.now();
+        todayTimeEl.classList.remove('hidden');
+        todayTimeValueEl.textContent = formatClock(seconds);
+        updateTrackTimeAvailability();
+    }
+
     /**
      * Подтягивает суммарно затреканное сегодня в Jira время. Специально не участвует в
      * цепочке загрузки задачи и ничего не блокирует: индикатор появляется сам, когда Jira
@@ -1392,14 +1405,217 @@
         todayTimeValueEl.innerHTML = spinnerHtml();
         try {
             const data = await apiCall('../api/today_time_spent.php', {});
-            todayTimeValueEl.textContent = formatClock(data.time_spent_seconds || 0);
+            applyTodayTimeSpent(data.time_spent_seconds || 0);
         } catch (e) {
             todayTimeEl.classList.add('hidden');
             todayTimeValueEl.textContent = '';
+            updateTrackTimeAvailability();
         } finally {
             todayTimeLoading = false;
         }
     }
+
+    // ==================== Быстрый трек времени ползунком ====================
+
+    /** Кружок трека всплывает по наведению только когда трекать есть куда: открыта задача и
+     * время из Jira доступно (индикатор скрыт — значит интеграция не настроена или недоступна) */
+    function updateTrackTimeAvailability() {
+        const available = Boolean(state.task) && !todayTimeEl.classList.contains('hidden');
+        trackTimeBtn.classList.toggle('available', available);
+    }
+
+    /**
+     * Модалка трека времени ползунком — одна на кружок быстрого трека и на пункт чек-листа
+     * «Затрекать время»: ползунок от начала до конца рабочего дня ([worktime] в
+     * config/params.ini), позиция бегунка — время, до которого отработан день. Отсюда
+     * сумма трека за день = отработанные минуты до позиции (обед из них вычитается,
+     * см. workedMinutes), а в Jira уходит только разница с уже затреканным (alreadySeconds).
+     * Минимум ползунка — позиция уже затреканного времени: «раз-трекать» назад нельзя,
+     * поэтому левее бегунок не уводим.
+     *
+     * Различается только отправка: `submit(minutes)` уходит в свой эндпоинт и сам сообщает
+     * об успехе (тост, отметка пункта), ошибку — бросает. `noteHtml` — необязательная строка
+     * над ползунком (у пункта чек-листа там затреканное именно в эту задачу время).
+     */
+    function openQuickTrackModal(alreadySeconds, { submit, noteHtml = '' }) {
+        const startMinutes = parseClock(WORK_TIME.start);
+        const maxMinutes = parseClock(WORK_TIME.end) - startMinutes;
+        const normSeconds = Math.round(Number(WORK_TIME.daily_hours) * 3600);
+        // Обед задан не всегда (Config отдаёт пустые строки, если он не влезает в рабочий день)
+        const hasLunch = Boolean(WORK_TIME.lunch_start && WORK_TIME.lunch_end);
+        const lunchFrom = hasLunch ? parseClock(WORK_TIME.lunch_start) - startMinutes : 0;
+        const lunchTo = hasLunch ? parseClock(WORK_TIME.lunch_end) - startMinutes : 0;
+
+        /** Отработанные минуты для позиции бегунка: попавший в интервал обед не работа */
+        const workedMinutes = (position) =>
+            position - Math.max(0, Math.min(position, lunchTo) - lunchFrom);
+
+        /** Обратное к workedMinutes: позиция бегунка, при которой отработано worked минут */
+        const positionFor = (worked) =>
+            hasLunch && worked > lunchFrom ? worked + (lunchTo - lunchFrom) : worked;
+
+        // Стартовая позиция — ближайший шаг сетки не выше уже затреканного, чтобы первый же
+        // сдвиг вправо добавлял время, а не «догонял» дробный остаток
+        const baseMinutes = Math.min(
+            maxMinutes,
+            positionFor(Math.floor(alreadySeconds / 60 / TRACK_STEP_MINUTES) * TRACK_STEP_MINUTES)
+        );
+
+        let closeModal = null;
+        let addedMinutes = 0;
+
+        return showModal(
+            'Затрекать время',
+            noteHtml +
+                '<div class="worktime">' +
+                `<span class="worktime-edge">${escapeHtml(WORK_TIME.start)}</span>` +
+                '<div class="worktime-track">' +
+                '<span class="worktime-bubble" data-worktime-bubble></span>' +
+                // Ползунок покрывает весь рабочий день (min=0 — его начало), чтобы уже
+                // затреканное время было видно зелёной частью заполнения; левее него бегунок
+                // не пускает render() — «раз-трекать» назад нельзя
+                '<input type="range" class="worktime-range" data-worktime-range ' +
+                `min="0" max="${maxMinutes}" step="${TRACK_STEP_MINUTES}" value="${baseMinutes}">` +
+                '<span class="worktime-clock" data-worktime-clock></span>' +
+                '</div>' +
+                `<span class="worktime-edge">${escapeHtml(WORK_TIME.end)}</span>` +
+                '</div>',
+            [
+                { label: 'Отмена', value: null },
+                {
+                    label: 'Затрекать',
+                    primary: true,
+                    keepOpen: true, // модалка закрывается вручную через close() только после успешного ответа Jira
+                    onClick: async (buttonEl) => {
+                        setButtonLoading(buttonEl, true);
+                        try {
+                            await submit(addedMinutes);
+                            loadTodayTimeSpent(); // индикатор должен сразу учесть новый worklog
+                            closeModal(true);
+                        } catch (e) {
+                            showToast(e.message || 'Не удалось затрекать время в Jira');
+                            setButtonLoading(buttonEl, false);
+                        }
+                    },
+                },
+            ],
+            (bodyEl, close) => {
+                closeModal = close;
+
+                const range = bodyEl.querySelector('[data-worktime-range]');
+                const bubble = bodyEl.querySelector('[data-worktime-bubble]');
+                const clock = bodyEl.querySelector('[data-worktime-clock]');
+
+                // Бегунок не выходит за края трека, поэтому его центр — не просто доля ширины
+                const usableWidth = () => range.clientWidth - TRACK_THUMB_SIZE;
+                const centerOf = (minutes) =>
+                    TRACK_THUMB_SIZE / 2 + (maxMinutes === 0 ? 0 : minutes / maxMinutes) * usableWidth();
+
+                /** Последнее валидное значение — по нему видно, в какую сторону едет бегунок,
+                 * когда его надо перекинуть через обед (стоять внутри обеда бессмысленно:
+                 * отработанное время там не растёт) */
+                let lastValue = baseMinutes;
+
+                function normalizePosition(raw) {
+                    const clamped = Math.min(maxMinutes, Math.max(baseMinutes, raw));
+                    if (!hasLunch || clamped <= lunchFrom || clamped >= lunchTo) return clamped;
+                    return clamped > lastValue ? lunchTo : lunchFrom;
+                }
+
+                function render() {
+                    const value = normalizePosition(Number(range.value));
+                    if (Number(range.value) !== value) {
+                        range.value = value; // левее затреканного и внутрь обеда бегунок не пускаем
+                    }
+                    lastValue = value;
+                    const addedSeconds = Math.max(0, workedMinutes(value) * 60 - alreadySeconds);
+                    addedMinutes = Math.round(addedSeconds / 60);
+
+                    const thumbCenter = centerOf(value);
+                    // Границы заполнения — в пикселях, а не в процентах: только так стык зелёного
+                    // (уже затреканного) и синего (добавляемого) попадает точно под центр бегунка
+                    range.style.setProperty('--base', `${centerOf(baseMinutes)}px`);
+                    range.style.setProperty('--fill', `${thumbCenter}px`);
+                    if (hasLunch) {
+                        range.style.setProperty('--lunch-a', `${centerOf(lunchFrom)}px`);
+                        range.style.setProperty('--lunch-b', `${centerOf(lunchTo)}px`);
+                    }
+
+                    clock.style.left = `${thumbCenter}px`;
+                    clock.textContent = formatTimeOfDay(startMinutes + value);
+                    // Позиция позже текущего времени — зелёная, не позже — оранжевая.
+                    // Время берём в момент рендера, за время открытой модалки оно уходит вперёд.
+                    const now = new Date();
+                    clock.className =
+                        'worktime-clock ' +
+                        (now.getHours() * 60 + now.getMinutes() < startMinutes + value
+                            ? 'worktime-clock--ok'
+                            : 'worktime-clock--warn');
+
+                    if (addedSeconds > 0) {
+                        bubble.textContent =
+                            `+${formatClock(addedSeconds)} (${formatClock(alreadySeconds + addedSeconds)})`;
+                        bubble.className = 'worktime-bubble worktime-bubble--adding';
+                    } else {
+                        bubble.textContent = formatClock(alreadySeconds);
+                        bubble.className =
+                            'worktime-bubble ' +
+                            (alreadySeconds >= normSeconds ? 'worktime-bubble--met' : 'worktime-bubble--under');
+                    }
+                    // Длинный пузырёк у краёв трека вылез бы за модалку — придерживаем его внутри
+                    const half = bubble.offsetWidth / 2;
+                    bubble.style.left =
+                        `${Math.min(Math.max(thumbCenter, half), range.clientWidth - half)}px`;
+
+                    // Кнопки showModal() создаёт после onRender, поэтому ищем их при каждом рендере
+                    const primaryEl = modalActionsEl.querySelector('.btn-primary');
+                    primaryEl.disabled = addedMinutes === 0;
+
+                    // Итог по центру ряда действий: сколько реально уйдёт в Jira (без обеда).
+                    // Вставляется здесь же — на момент onRender кнопок в DOM ещё нет.
+                    let summaryEl = modalActionsEl.querySelector('[data-worktime-summary]');
+                    if (!summaryEl) {
+                        summaryEl = document.createElement('span');
+                        summaryEl.className = 'worktime-summary';
+                        summaryEl.setAttribute('data-worktime-summary', '');
+                        modalActionsEl.insertBefore(summaryEl, primaryEl);
+                    }
+                    summaryEl.textContent = `Будет затрекано: ${formatHoursMinutes(addedSeconds)}`;
+                }
+
+                // Перетаскивание, клик по треку и стрелки клавиатуры — нативные, render()
+                // только доводит значение до допустимого (граница затреканного, обед)
+                range.addEventListener('input', render);
+
+                // Первый рендер — только после показа модалки: у скрытого ползунка ширина
+                // равна нулю, и позиции пузырька/времени посчитались бы неверно
+                requestAnimationFrame(render);
+            }
+        );
+    }
+
+    trackTimeBtn.addEventListener('click', async () => {
+        // Затреканное за сегодня перечитываем перед показом: от него считается и подсветка
+        // относительно нормы, и то, сколько добавится при сохранении
+        setButtonLoading(trackTimeBtn, true);
+        let alreadySeconds = 0;
+        try {
+            const data = await apiCall('../api/today_time_spent.php', {});
+            alreadySeconds = data.time_spent_seconds || 0;
+            applyTodayTimeSpent(alreadySeconds);
+        } catch (e) {
+            showToast(e.message || 'Не удалось получить затреканное сегодня время');
+            return;
+        } finally {
+            setButtonLoading(trackTimeBtn, false);
+        }
+        await openQuickTrackModal(alreadySeconds, {
+            submit: async (minutes) => {
+                await apiCall('../api/log_time_quick.php', { task_id: state.task.id, minutes });
+                showToast(`В Jira затрекано ${formatDuration(minutes * 60)}`);
+            },
+        });
+    });
 
     /** Возврат к окну — момент «я вернулся из Jira, где мог затрекать время руками»,
      * но переключаются между окнами часто, а время в Jira так часто не меняется:

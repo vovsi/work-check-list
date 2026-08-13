@@ -133,11 +133,10 @@ final class TaskService
     }
 
     /**
-     * Добавляет worklog в Jira (время сверх уже затреканного) и отмечает пункт чек-листа
-     * выполненным. Пункт отмечается только при успешном ответе Jira — по той же причине,
-     * что и updateStoryPoints()/transitionToPullRequest() выше.
+     * Добавляет worklog в Jira, не касаясь чек-листа — для быстрого трека времени ползунком
+     * (кружок рядом с индикатором затреканного за сегодня времени). Возвращает саму задачу.
      */
-    public function logTime(int $taskId, int $checklistId, int $seconds): array
+    public function logTimeOnly(int $taskId, int $seconds): array
     {
         $task = $this->tasks->findById($taskId);
         if ($task === null) {
@@ -148,6 +147,18 @@ final class TaskService
         }
 
         $this->jiraSync->addWorklog($task, $seconds);
+
+        return $task;
+    }
+
+    /**
+     * Добавляет worklog в Jira (время сверх уже затреканного) и отмечает пункт чек-листа
+     * выполненным. Пункт отмечается только при успешном ответе Jira — по той же причине,
+     * что и updateStoryPoints()/transitionToPullRequest() выше.
+     */
+    public function logTime(int $taskId, int $checklistId, int $seconds): array
+    {
+        $task = $this->logTimeOnly($taskId, $seconds);
         $this->checklist->setDone($taskId, $checklistId, true);
 
         return [

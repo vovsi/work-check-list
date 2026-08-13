@@ -9,6 +9,15 @@ use RuntimeException;
 /** Читает config/params.ini (не в git — см. config/params.ini.example) */
 final class Config
 {
+    /** Значения [worktime] по умолчанию — используются и при отсутствии config/params.ini (см. public/index.php) */
+    public const WORK_TIME_DEFAULTS = [
+        'start' => '09:00',
+        'end' => '18:00',
+        'daily_hours' => 8.0,
+        'lunch_start' => '12:00',
+        'lunch_end' => '13:00',
+    ];
+
     private static ?array $data = null;
 
     public static function llm(): array
@@ -58,6 +67,56 @@ final class Config
         $status = trim((string) ($data['atlassian']['pull_request_status'] ?? ''));
 
         return $status !== '' ? $status : 'Pull request';
+    }
+
+    /**
+     * Рабочий день и норма часов для ползунка быстрого трека времени: границы ползунка
+     * (start/end), норма, по которой затреканное за день время подсвечивается оранжевым
+     * (меньше нормы) или зелёным, и обеденный перерыв (lunch_start/lunch_end) — он
+     * подсвечивается на ползунке и не идёт в трекинг. Некорректные значения (не HH:MM,
+     * конец не позже начала, норма ≤ 0) молча заменяются на WORK_TIME_DEFAULTS — иначе
+     * ползунок оказался бы мёртвым. Обед, не влезающий в рабочий день, просто отключается
+     * (пустые строки) — это не повод ломать сам ползунок.
+     */
+    public static function workTime(): array
+    {
+        $section = self::load()['worktime'] ?? [];
+
+        $start = self::normalizeClock((string) ($section['start'] ?? ''), self::WORK_TIME_DEFAULTS['start']);
+        $end = self::normalizeClock((string) ($section['end'] ?? ''), self::WORK_TIME_DEFAULTS['end']);
+        // HH:MM с ведущим нулём сравнимы как строки
+        if ($end <= $start) {
+            $start = self::WORK_TIME_DEFAULTS['start'];
+            $end = self::WORK_TIME_DEFAULTS['end'];
+        }
+
+        $dailyHours = (float) ($section['daily_hours'] ?? 0);
+
+        $lunchStart = self::normalizeClock(
+            (string) ($section['lunch_start'] ?? ''),
+            self::WORK_TIME_DEFAULTS['lunch_start']
+        );
+        $lunchEnd = self::normalizeClock(
+            (string) ($section['lunch_end'] ?? ''),
+            self::WORK_TIME_DEFAULTS['lunch_end']
+        );
+        if ($lunchEnd <= $lunchStart || $lunchStart < $start || $lunchEnd > $end) {
+            $lunchStart = '';
+            $lunchEnd = '';
+        }
+
+        return [
+            'start' => $start,
+            'end' => $end,
+            'daily_hours' => $dailyHours > 0 ? $dailyHours : self::WORK_TIME_DEFAULTS['daily_hours'],
+            'lunch_start' => $lunchStart,
+            'lunch_end' => $lunchEnd,
+        ];
+    }
+
+    private static function normalizeClock(string $value, string $fallback): string
+    {
+        return preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', trim($value)) === 1 ? trim($value) : $fallback;
     }
 
     /** Ники ревьюверов для команды `gh pr create --reviewer`. Не задано в конфиге — пустой список (флаг просто не добавляется в команду) */

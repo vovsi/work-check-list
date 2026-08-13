@@ -4,6 +4,8 @@
     --accent: #0a84ff;
     --accent-soft: rgba(10, 132, 255, 0.14);
     --success: #29bd4e;
+    /* Оранжевый предупреждения (в духе systemOrange) — «затрекано меньше нормы за день» */
+    --warning: #f08c00;
     --danger: #d9483f;
     --danger-soft: rgba(217, 72, 63, 0.12);
     --danger-border: rgba(217, 72, 63, 0.22);
@@ -21,6 +23,12 @@
     --divider: rgba(60, 60, 67, 0.1);
     /* Подсказка плотнее обычной поверхности — мелкий текст поверх любого фона должен читаться */
     --tooltip-bg: rgba(255, 255, 255, 0.88);
+    /* Незаполненная часть жёлоба ползунка трека времени и фон пилюли с временем дня */
+    --worktime-groove: rgba(118, 118, 128, 0.20);
+    --worktime-clock-bg: rgba(118, 118, 128, 0.14);
+    --worktime-thumb-border: rgba(0, 0, 0, 0.10);
+    /* Обеденный перерыв на ползунке — не рабочее время, в трек не идёт */
+    --worktime-lunch: #ffb340;
 }
 
 html[data-theme="dark"] {
@@ -36,9 +44,14 @@ html[data-theme="dark"] {
     --shadow: 0 20px 60px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3);
     --divider: rgba(235, 235, 245, 0.1);
     --tooltip-bg: rgba(58, 58, 62, 0.88);
+    --warning: #ff9f0a;
     --danger: #ff6b60;
     --danger-soft: rgba(255, 107, 96, 0.16);
     --danger-border: rgba(255, 107, 96, 0.26);
+    --worktime-groove: rgba(0, 0, 0, 0.34);
+    --worktime-clock-bg: rgba(235, 235, 245, 0.14);
+    --worktime-thumb-border: rgba(0, 0, 0, 0.28);
+    --worktime-lunch: #ff9f0a;
 }
 
 * {
@@ -98,10 +111,19 @@ body {
 
 /* ==================== Затреканное сегодня время (левый верхний угол) ==================== */
 
-.today-time {
+/* Пилюля времени и кружок быстрого трека — одна группа: наведение на любой из них
+   держит кружок открытым (иначе он прятался бы, пока мышь идёт от пилюли к нему) */
+.today-time-group {
     position: fixed;
     top: 14px;
     left: 14px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.today-time {
     height: 30px;
     padding: 0 11px;
     border-radius: 15px;
@@ -118,12 +140,47 @@ body {
     font-size: 12.5px;
     font-variant-numeric: tabular-nums;
     cursor: pointer;
-    z-index: 20;
     transition: color 0.15s ease;
 }
 
 .today-time:hover {
     color: var(--text-primary);
+}
+
+/* Кружок быстрого трека времени: выезжает из-под пилюли времени по наведению (в духе
+   всплывающих подсказок Spotlight) и только когда трекать есть куда — класс .available
+   ставит app.js, если открыта задача и время из Jira доступно */
+.track-time-btn {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid var(--surface-border);
+    background: var(--surface);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: var(--shadow);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transform: translateX(-12px) scale(0.6);
+    pointer-events: none;
+    transition: opacity 0.16s ease, transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.15s ease;
+}
+
+.today-time-group:hover .track-time-btn.available,
+.track-time-btn.available:focus-visible {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+}
+
+.track-time-btn.available:hover {
+    box-shadow: var(--shadow), 0 0 0 4px var(--accent-soft);
 }
 
 /* Пока идёт запрос к Jira — на месте значения крутится спиннер; ширина держится,
@@ -295,89 +352,180 @@ textarea.input {
     line-height: 1.4;
 }
 
-/* Часы/минуты в модалке пункта «Затрекать время» — два равных поля в ряд */
-.time-tracking-inputs {
+/* ==================== Ползунок быстрого трека времени ====================
+   Позиция бегунка — время, до которого отработан день: заполнение слева до бегунка это
+   суммарный трек за день (зелёная часть — уже затреканное в Jira, синяя — то, что добавится
+   при сохранении). Границы — начало и конец рабочего дня из config/params.ini ([worktime]). */
+.worktime {
     display: flex;
-    gap: 10px;
-    margin-top: 12px;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
 }
 
-.time-tracking-field {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    font-size: 12px;
-    color: var(--text-secondary);
-}
-
-.time-tracking-label {
-    padding-left: 2px;
-}
-
-/* Степпер в стиле iOS (UIStepper) — минус/плюс встроены в ту же пилюлю, что и .input,
-   заменяют собой нативные стрелочки браузера у type="number" (некрасивые и разные в каждом
-   браузере, см. .stepper-input ниже) */
-.stepper {
-    display: flex;
-    align-items: stretch;
-    border-radius: 12px;
-    border: 1px solid var(--checkbox-border);
-    background: rgba(127, 127, 127, 0.08);
-    overflow: hidden;
-}
-
-.stepper-btn {
+.worktime-edge {
     flex: none;
-    width: 34px;
-    border: none;
-    background: none;
-    color: var(--accent);
-    font-size: 17px;
-    font-weight: 500;
-    line-height: 1;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.12s ease;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+    opacity: 0.75;
+    font-variant-numeric: tabular-nums;
 }
 
-.stepper-btn:first-child {
-    border-right: 1px solid var(--divider);
-}
-
-.stepper-btn:last-child {
-    border-left: 1px solid var(--divider);
-}
-
-.stepper-btn:hover {
-    background: rgba(127, 127, 127, 0.1);
-}
-
-.stepper-btn:active {
-    background: var(--accent-soft);
-}
-
-/* Перекрывает .input — убирает границу/фон/скругление у самого поля (они теперь у .stepper
-   целиком) и нативные стрелочки number-инпута во всех браузерах */
-.stepper-input {
+/* Вертикальные отступы — место для пузырька над бегунком и подписи времени под ним
+   (оба позиционируются абсолютно по горизонтали, см. renderQuickTrack в app.js) */
+.worktime-track {
+    position: relative;
     flex: 1;
     min-width: 0;
-    padding: 8px 0;
-    border: none;
-    background: none;
-    border-radius: 0;
-    text-align: center;
-    -moz-appearance: textfield;
+    padding: 30px 0 26px;
 }
 
-.stepper-input:focus {
-    box-shadow: none;
-}
-
-.stepper-input::-webkit-inner-spin-button,
-.stepper-input::-webkit-outer-spin-button {
+/* Жёлоб высокий (18px), но полностью плоский: только сплошные цвета, без градиентов-бликов
+   и без теней — вид в духе iOS/macOS Tahoe. Бегунок (26px, TRACK_THUMB_SIZE в app.js)
+   намеренно выше жёлоба и выступает за него сверху и снизу. */
+.worktime-range {
     -webkit-appearance: none;
+    appearance: none;
+    display: block;
+    width: 100%;
+    height: 18px;
     margin: 0;
+    border-radius: 9px;
+    outline: none;
+    cursor: pointer;
+    /* --fill — позиция бегунка, --base — граница уже затреканного, --lunch-a/--lunch-b —
+       границы обеденного перерыва (все ставит app.js). Обед — отдельный слой поверх
+       заполнения: он виден и на пройденной, и на непройденной части трека. Без обеда обе
+       границы остаются нулевыми, и слой просто не рисуется. */
+    --lunch-a: 0px;
+    --lunch-b: 0px;
+    background:
+        linear-gradient(
+            to right,
+            transparent 0 var(--lunch-a),
+            var(--worktime-lunch) var(--lunch-a) var(--lunch-b),
+            transparent var(--lunch-b) 100%
+        ),
+        linear-gradient(
+            to right,
+            var(--success) 0 var(--base),
+            var(--accent) var(--base) var(--fill),
+            var(--worktime-groove) var(--fill) 100%
+        );
+}
+
+.worktime-range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #fff;
+    /* Плоский контур вместо тени: белый бегунок выступает за жёлоб и на светлом фоне
+       модалки без него терял бы края */
+    border: 1px solid var(--worktime-thumb-border);
+    box-shadow: none;
+    cursor: grab;
+}
+
+.worktime-range::-webkit-slider-thumb:active {
+    cursor: grabbing;
+}
+
+.worktime-range::-moz-range-thumb {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: #fff;
+    /* Плоский контур вместо тени: белый бегунок выступает за жёлоб и на светлом фоне
+       модалки без него терял бы края */
+    border: 1px solid var(--worktime-thumb-border);
+    box-shadow: none;
+    cursor: grab;
+}
+
+.worktime-range:focus-visible {
+    box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+/* Пузырёк над бегунком: в покое — затрекано за сегодня (оранжевый/зелёный относительно
+   нормы), при перетаскивании — сколько добавится и сколько станет в сумме */
+.worktime-bubble {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    font-size: 13.5px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.1px;
+}
+
+.worktime-bubble--under {
+    color: var(--warning);
+}
+
+.worktime-bubble--met {
+    color: var(--success);
+}
+
+.worktime-bubble--adding {
+    color: var(--accent);
+}
+
+/* Время, которому соответствует позиция бегунка. Плоская пилюля вместо голого серого
+   текста — на светлом фоне модалки мелкая подпись иначе почти не читается. */
+.worktime-clock {
+    position: absolute;
+    bottom: 0;
+    transform: translateX(-50%);
+    white-space: nowrap;
+    padding: 2px 8px;
+    border-radius: 8px;
+    background: var(--worktime-clock-bg);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Позиция бегунка позже текущего времени — зелёная, не позже — оранжевая */
+.worktime-clock--ok {
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 16%, transparent);
+}
+
+.worktime-clock--warn {
+    color: var(--warning);
+    background: color-mix(in srgb, var(--warning) 16%, transparent);
+}
+
+/* Итог трека по центру ряда действий модалки, между «Отмена» и «Затрекать» */
+.worktime-summary {
+    flex: 1;
+    align-self: center; /* по центру высоты кнопок, а не по верхнему краю ряда */
+    text-align: center;
+    font-size: 13px;
+    font-weight: 700;
+    white-space: nowrap;
+    color: var(--text-primary);
+}
+
+/* Модалка быстрого трека светлее обычной — плоские цвета ползунка на полупрозрачной
+   поверхности по умолчанию сливаются с фоном за модалкой. Только фон, тень остаётся общая.
+   Шире стандартных 360px и с меньшими боковыми отступами: точность попадания по ползунку
+   зависит от его длины, поэтому здесь трек тянем на всю доступную ширину окна 500×500.
+   Селектор по содержимому (:has), чтобы не тащить в showModal() лишний параметр-модификатор. */
+.modal:has(.worktime) {
+    background: rgba(255, 255, 255, 0.88);
+    border-color: rgba(255, 255, 255, 0.9);
+    max-width: 470px;
+    padding: 24px 18px;
+}
+
+html[data-theme="dark"] .modal:has(.worktime) {
+    background: rgba(66, 66, 71, 0.86);
+    border-color: rgba(255, 255, 255, 0.14);
 }
 
 .error-text {
@@ -875,6 +1023,13 @@ html[data-theme="dark"] .checklist-item:hover {
     transform: scale(0.97);
 }
 
+/* :not(.btn-loading) — у кнопки со спиннером disabled стоит на время запроса,
+   и приглушать её (вместе со спиннером) не нужно */
+.btn:disabled:not(.btn-loading) {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
 .btn-primary {
     background: var(--accent);
     color: #fff;
@@ -1100,6 +1255,12 @@ html[data-theme="dark"] .checklist-item:hover {
     color: var(--text-secondary);
     line-height: 1.5;
     margin-bottom: 16px;
+}
+
+/* Модалка-вопрос без текста (только заголовок и кнопки) — иначе пустое тело добавляет
+   лишний отступ между заголовком и кнопками */
+.modal-body:empty {
+    margin-bottom: 4px;
 }
 
 .modal-body .snippet {
