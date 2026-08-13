@@ -14,9 +14,10 @@
     const JIRA_DESCRIPTION_HTML =
         '<b> Results</b><br/>1. <br/>' +
         '<b> Testing</b><br/>1. <br/>' +
+        '<b> Database</b><br/>1. <br/>' +
         '<b> Pull Requests</b><br/>1. <br/>';
 
-    const JIRA_DESCRIPTION_PLAIN = 'Results\n1. \n\nTesting\n1. \n\nPull Requests\n1. ';
+    const JIRA_DESCRIPTION_PLAIN = 'Results\n1. \n\nTesting\n1. \n\nDatabase\n1. \n\nPull Requests\n1. ';
 
     function buildClaudeReviewText(prLink) {
         return 'Ты — Senior Fullstack Code Reviewer с глубокой экспертизой в PHP, MySQL, JavaScript, HTML и CSS. \n\n' +
@@ -40,6 +41,10 @@
         '   - Насколько просто написать Unit/Integration тесты для этого кода.\n' +
         '   - Наличие хардкода (константы, конфиги, секреты прямо в коде).\n\n' +
         '---\n\n' +
+        '### Важное исключение:\n\n' +
+        'Для репозиториев `api_v3` и `adminka` миграции для MySQL не выполняются — не проверяй ' +
+        'корректность и не оценивай качество написанных миграций в этих репозиториях.\n\n' +
+        '---\n\n' +
         '### Формат ответа:\n\n' +
         '1. **Краткое резюме:** Общее впечатление от PR (1–3 предложения).\n' +
         '2. **Critical / Blocker (Критические проблемы):** Ошибки безопасности, баги, приводящие к падению, утечки памяти, SQL-инъекции. Требуют обязательно исправления.\n' +
@@ -54,7 +59,7 @@
     /** Команда `gh pr create` для пункта «Создать PR» — ревьюверы подставляются из config/params.ini (см. Config::githubReviewers) */
     function buildGhPrCreateCommand() {
         const reviewers = (window.DEVFLOW_CONFIG && window.DEVFLOW_CONFIG.githubReviewers) || [];
-        let command = 'gh pr create --title "$(git log -1 --format=%s)" --body "$(git log -1 --format=%b)" --assignee "@me"';
+        let command = 'gh pr create --draft --title "$(git log -1 --format=%s)" --body "$(git log -1 --format=%b)" --assignee "@me"';
         if (reviewers.length > 0) {
             command += ` --reviewer "${reviewers.join(',')}"`;
         }
@@ -122,6 +127,7 @@
         'code_written',
         'pull_request',
         'claude_review',
+        'deploy_instruction',
         'jira_description',
         'send_pr',
     ]);
@@ -193,6 +199,8 @@
         code_written: 'php',
         pull_request: 'github',
         claude_review: 'claude',
+        deploy_instruction: 'github',
+        status_ready_for_review: 'github',
         jira_description: 'jira',
         status_pull_request: 'jira',
         time_tracking: 'jira',
@@ -915,6 +923,34 @@
         applyChecklistUpdate(data, checklistId);
     }
 
+    /**
+     * Возвращает пользователя к пункту с указанным code — снимает отметки с него и всех
+     * пунктов после него, чтобы цикл работы повторился (например по следующему репозиторию).
+     * Привязка по code, а не по позиции — см. инвариант проекта в CLAUDE.md.
+     */
+    async function rewindTo(code) {
+        const index = state.checklist.findIndex((i) => i.code === code);
+        if (index < 0) return;
+
+        let data = null;
+        for (const above of state.checklist.slice(index)) {
+            if (!above.is_done) continue;
+            data = await apiCall('../api/toggle.php', {
+                task_id: state.task.id,
+                checklist_id: above.id,
+                done: false,
+            });
+        }
+        if (data) {
+            state.checklist = data.checklist;
+            if (data.task) {
+                state.task = data.task;
+            }
+        }
+        renderProgress();
+        renderChecklist();
+    }
+
     let jumpInProgress = false;
 
     /**
@@ -1131,18 +1167,6 @@
                 return;
             }
 
-            // Одна задача может затрагивать несколько репозиториев — если проект ещё есть,
-            // пункт остаётся невыполненным и цикл «описание → commit message → пуш» повторяется
-            // с него же. Откатывать ничего не нужно: отметка ещё не проставлена.
-            const hasMoreProjects = await showModal('Есть ещё один проект?', '', [
-                { label: 'Нет', value: false },
-                { label: 'Да', primary: true, value: true },
-            ]);
-            if (hasMoreProjects === true) {
-                showToast('Закоммитьте код в следующем проекте');
-                return;
-            }
-
             await markDone(item.id);
         },
 
@@ -1166,7 +1190,7 @@
                 [
                     { label: 'Отмена', value: null },
                     {
-                        label: 'Завершить',
+                        label: 'Готово',
                         primary: true,
                         getValue: () => modalBodyEl.querySelector('#pr-link-input').value.trim() || null,
                     },
@@ -1195,7 +1219,7 @@
                     '</div>',
                 [
                     { label: 'Отмена', value: false },
-                    { label: 'Завершить', primary: true, value: true },
+                    { label: 'Готово', primary: true, value: true },
                 ],
                 (bodyEl) => {
                     bodyEl.querySelector('[data-copy-btn]').addEventListener('click', async () => {
@@ -1204,13 +1228,90 @@
                     });
                 }
             );
-            if (confirmed) {
-                await markDone(item.id);
+            if (!confirmed) {
+                return;
             }
+
+            // Одна задача может затрагивать несколько репозиториев — если проект ещё есть,
+            // весь цикл «коммит → PR → ревью» повторяется для него, поэтому откатываемся
+            // к «Закоммитить код» (этот пункт не отмечаем — он тоже войдёт в новый цикл)
+            const hasMoreProjects = await showModal('Есть ещё один проект?', '', [
+                { label: 'Нет', value: false },
+                { label: 'Да', primary: true, value: true },
+            ]);
+            if (hasMoreProjects === true) {
+                await rewindTo('code_written');
+                showToast('Закоммитьте код в следующем проекте');
+                return;
+            }
+
+            await markDone(item.id);
         },
 
+        // Указать инструкцию выливки — ввести сырой текст, сгенерировать читаемое markdown-описание
+        // для PR нейронкой (копируется в буфер сразу по готовности; под результатом появляется
+        // отдельная кнопка «Скопировать» для повторного копирования, генерацию тоже можно
+        // повторять), отметка пункта — только отдельной кнопкой «Готово»
+        deploy_instruction: async (item) => {
+            const confirmed = await showModal(
+                'Инструкция выливки',
+                '<div class="deploy-instruction">' +
+                    `<textarea class="input textarea" placeholder="${escapeHtml('Что нужно сделать перед мерджем...')}"></textarea>` +
+                    '<div class="modal-copy-actions">' +
+                    '<button type="button" class="btn btn-secondary" data-generate-btn>Сгенерировать</button>' +
+                    '</div>' +
+                    '<div class="snippet hidden" id="deploy-instruction-result"></div>' +
+                    '<div class="modal-copy-actions hidden" id="deploy-instruction-copy-actions">' +
+                    '<button type="button" class="btn btn-secondary" data-copy-result-btn>Скопировать</button>' +
+                    '</div>' +
+                    '</div>',
+                [
+                    { label: 'Отмена', value: false },
+                    { label: 'Готово', primary: true, value: true },
+                ],
+                (bodyEl) => {
+                    bodyEl.querySelector('[data-generate-btn]').addEventListener('click', async (e) => {
+                        const buttonEl = e.currentTarget;
+                        const instruction = bodyEl.querySelector('textarea').value.trim();
+                        if (!instruction) {
+                            showToast('Введите инструкцию');
+                            return;
+                        }
+
+                        setButtonLoading(buttonEl, true);
+                        try {
+                            const data = await apiCall('../api/generate_deploy_instruction.php', { instruction });
+                            await copyText(data.instruction);
+                            notifyCopied('инструкция для PR');
+                            const resultEl = bodyEl.querySelector('#deploy-instruction-result');
+                            resultEl.textContent = data.instruction;
+                            resultEl.classList.remove('hidden');
+                            bodyEl.querySelector('#deploy-instruction-copy-actions').classList.remove('hidden');
+                        } catch (e) {
+                            showToast(e.message || 'Не удалось сгенерировать инструкцию');
+                        } finally {
+                            setButtonLoading(buttonEl, false);
+                        }
+                    });
+                    bodyEl.querySelector('[data-copy-result-btn]').addEventListener('click', async () => {
+                        const result = bodyEl.querySelector('#deploy-instruction-result').textContent;
+                        await copyText(result);
+                        notifyCopied('инструкция для PR');
+                    });
+                }
+            );
+            if (!confirmed) {
+                return;
+            }
+
+            await markDone(item.id);
+        },
+
+        // PR`s переведены в Ready for review — отмечается сразу
+        status_ready_for_review: (item) => markDone(item.id),
+
         // Оставить описание в Jira — кнопки копирования (описание и ссылка на PR из шага
-        // «PR создан») можно нажимать повторно, отметка пункта — отдельной кнопкой «Завершить»
+        // «PR создан») можно нажимать повторно, отметка пункта — отдельной кнопкой «Готово»
         jira_description: async (item) => {
             const confirmed = await showModal(
                 'Описание в Jira',
@@ -1221,7 +1322,7 @@
                     '</div>',
                 [
                     { label: 'Отмена', value: false },
-                    { label: 'Завершить', primary: true, value: true },
+                    { label: 'Готово', primary: true, value: true },
                 ],
                 (bodyEl) => {
                     bodyEl.querySelector('[data-copy-btn]').addEventListener('click', async () => {
@@ -1297,7 +1398,7 @@
             });
         },
 
-        // Отправить PR ревьюверу — модалка с двумя вариантами копирования, отметка только по «Завершить»
+        // Отправить PR ревьюверу — модалка с двумя вариантами копирования, отметка только по «Готово»
         send_pr: async (item) => {
             const link = sessionStorage.getItem(prLinkStorageKey());
             const detailsText = buildDeployDetailsText(state.task.task_id, link);
@@ -1309,7 +1410,7 @@
                     '</div>',
                 [
                     { label: 'Отмена', value: false },
-                    { label: 'Завершить', primary: true, value: true },
+                    { label: 'Готово', primary: true, value: true },
                 ],
                 (bodyEl) => {
                     bodyEl.querySelector('[data-copy-btn="link"]').addEventListener('click', async () => {

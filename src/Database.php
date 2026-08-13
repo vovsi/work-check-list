@@ -28,6 +28,8 @@ final class Database
         ['code' => 'code_written', 'title' => 'Закоммитить код'],
         ['code' => 'pull_request', 'title' => 'Создать PR'],
         ['code' => 'claude_review', 'title' => 'Проверить PR Claude Code'],
+        ['code' => 'deploy_instruction', 'title' => 'Указать инструкцию выливки'],
+        ['code' => 'status_ready_for_review', 'title' => 'PR`s переведены в Ready for review'],
         ['code' => 'jira_description', 'title' => 'Оставить описание в Jira'],
         ['code' => 'status_pull_request', 'title' => 'Перевести задачу в Pull Request'],
         ['code' => 'time_tracking', 'title' => 'Затрекать время'],
