@@ -18,6 +18,12 @@ final class Config
         'lunch_end' => '13:00',
     ];
 
+    /** Значения [salary] по умолчанию (см. salaryHourlyRateUsd()) */
+    public const SALARY_DEFAULTS = [
+        'monthly_usd' => 1500.0,
+        'working_days_per_month' => 21.0,
+    ];
+
     private static ?array $data = null;
 
     public static function llm(): array
@@ -69,6 +75,15 @@ final class Config
         return $status !== '' ? $status : 'Pull request';
     }
 
+    /** Название статуса Jira для перехода по пункту «Перевести в статус Doing». Не задано в конфиге — по умолчанию "Doing" */
+    public static function atlassianDoingStatus(): string
+    {
+        $data = self::load();
+        $status = trim((string) ($data['atlassian']['doing_status'] ?? ''));
+
+        return $status !== '' ? $status : 'Doing';
+    }
+
     /**
      * Рабочий день и норма часов для ползунка быстрого трека времени: границы ползунка
      * (start/end), норма, по которой затреканное за день время подсвечивается оранжевым
@@ -112,6 +127,29 @@ final class Config
             'lunch_start' => $lunchStart,
             'lunch_end' => $lunchEnd,
         ];
+    }
+
+    /**
+     * Часовая ставка в USD для расчёта заработка за день в модалке поздравления
+     * (EarningsService, показывается при достижении [worktime].daily_hours) — оклад в месяц
+     * делится на условное число рабочих часов в месяце. Некорректные значения (≤ 0) молча
+     * заменяются на SALARY_DEFAULTS, как и у workTime().
+     */
+    public static function salaryHourlyRateUsd(): float
+    {
+        $section = self::load()['salary'] ?? [];
+
+        $monthlyUsd = (float) ($section['monthly_usd'] ?? 0);
+        if ($monthlyUsd <= 0) {
+            $monthlyUsd = self::SALARY_DEFAULTS['monthly_usd'];
+        }
+
+        $workingDays = (float) ($section['working_days_per_month'] ?? 0);
+        if ($workingDays <= 0) {
+            $workingDays = self::SALARY_DEFAULTS['working_days_per_month'];
+        }
+
+        return $monthlyUsd / ($workingDays * self::workTime()['daily_hours']);
     }
 
     private static function normalizeClock(string $value, string $fallback): string

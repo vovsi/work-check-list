@@ -301,6 +301,11 @@
         return `${Math.floor(minutes / 60)} ч назад`;
     }
 
+    /** Заработок в гривнах для модалки поздравления — округляем до целого, с разделителем тысяч */
+    function formatUah(value) {
+        return `${Math.round(value).toLocaleString('ru-RU')} грн`;
+    }
+
     // ==================== Подсказки (data-tooltip) ====================
 
     /** Задержка перед показом — как в macOS: короткое наведение мышью подсказку не вызывает */
@@ -1048,8 +1053,23 @@
             );
         },
 
-        // Статус сменен на Doing — отмечается сразу
-        status_doing: (item) => markDone(item.id),
+        // Перевести в статус Doing — переводит статус задачи в Jira,
+        // отметка пункта — только при успешном переходе (см. status_pull_request для того же паттерна)
+        status_doing: async (item) => {
+            setItemLoading(item.id, true);
+            try {
+                const data = await apiCall('../api/transition_doing.php', {
+                    task_id: state.task.id,
+                    checklist_id: item.id,
+                });
+                applyChecklistUpdate(data, item.id);
+                showToast('Задача переведена в статус Doing');
+            } catch (e) {
+                showToast(e.message || 'Не удалось перевести статус задачи в Jira');
+            } finally {
+                setItemLoading(item.id, false);
+            }
+        },
 
         // Создать ветку в Git — запросить название, скопировать, сохранить в задаче.
         // Если ветка уже была сохранена ранее — можно оставить её без изменений в БД
@@ -1592,7 +1612,17 @@
                         try {
                             await submit(addedMinutes);
                             loadTodayTimeSpent(); // индикатор должен сразу учесть новый worklog
+
+                            // Поздравление — только в момент первого за сегодня достижения нормы:
+                            // если норма была выполнена уже до этого трека, считаем что поздравление
+                            // уже показывалось, и дальнейший трек (сверхурочные) его не повторяет.
+                            const totalSecondsToday = alreadySeconds + addedMinutes * 60;
+                            const justReachedNorm = alreadySeconds < normSeconds && totalSecondsToday >= normSeconds;
+
                             closeModal(true);
+                            if (justReachedNorm) {
+                                showCongratsModal(totalSecondsToday);
+                            }
                         } catch (e) {
                             showToast(e.message || 'Не удалось затрекать время в Jira');
                             setButtonLoading(buttonEl, false);
@@ -1692,6 +1722,47 @@
                 // равна нулю, и позиции пузырька/времени посчитались бы неверно
                 requestAnimationFrame(render);
             }
+        );
+    }
+
+    /** Цитаты-заглушка, если нейронка недоступна (api/generate_motivation_quote.php упал) —
+     * модалка поздравления не должна зависеть от сети до нейронки */
+    const MOTIVATION_QUOTES_FALLBACK = [
+        'Сегодняшняя дисциплина — завтрашняя свобода.',
+        'Маленькие дела, сделанные каждый день, складываются в большие результаты.',
+        'Ты не обязан быть быстрым. Ты обязан не останавливаться.',
+        'Каждый закрытый таск — кирпичик в стене того, что ты строишь.',
+        'Хорошо сделанная работа сама себе награда — а премия просто приятный бонус.',
+    ];
+
+    /**
+     * Модалка поздравления — показывается, когда трек времени за день впервые за сегодня
+     * достигает нормы [worktime].daily_hours (см. вызов в openQuickTrackModal). Заработок и
+     * цитата подгружаются параллельно и независимо друг от друга: ошибка одного запроса не
+     * должна прятать другой и не должна блокировать саму модалку (цитата на этот случай
+     * заменяется локальной заглушкой, а строка заработка просто не показывается).
+     */
+    async function showCongratsModal(totalSecondsToday) {
+        const [earnings, quote] = await Promise.all([
+            apiCall('../api/calc_earnings.php', { seconds: totalSecondsToday }).catch(() => null),
+            apiCall('../api/generate_motivation_quote.php', {}).catch(() => null),
+        ]);
+
+        const earningsHtml = earnings && earnings.earnings_uah > 0
+            ? `<p class="congrats-earnings">Ты заработал сегодня <strong>+${formatUah(earnings.earnings_uah)}</strong> 💸</p>`
+            : '';
+        const quoteText = (quote && quote.quote) ||
+            MOTIVATION_QUOTES_FALLBACK[Math.floor(Math.random() * MOTIVATION_QUOTES_FALLBACK.length)];
+
+        await showModal(
+            '🎉 Отличная работа! 🎉',
+            '<div class="congrats-modal">' +
+                '<div class="congrats-emoji">🎊🥳🎊</div>' +
+                '<p class="congrats-text">Ты сегодня хорошо поработал!</p>' +
+                earningsHtml +
+                `<p class="congrats-quote">«${escapeHtml(quoteText)}»</p>` +
+                '</div>',
+            [{ label: 'Спасибо!', primary: true, value: true }]
         );
     }
 

@@ -33,7 +33,8 @@ final class JiraSyncService
                 $config['email'],
                 $config['api_token'],
                 Config::atlassianStoryPointsField(),
-                Config::atlassianPullRequestStatus()
+                Config::atlassianPullRequestStatus(),
+                Config::atlassianDoingStatus()
             ),
             $tasks
         );
@@ -55,6 +56,11 @@ final class JiraSyncService
     public function transitionToPullRequest(array $task): void
     {
         $this->client->transitionToPullRequest($task['task_id']);
+    }
+
+    public function transitionToDoing(array $task): void
+    {
+        $this->client->transitionToDoing($task['task_id']);
     }
 
     public function getTimeSpentSeconds(array $task): int

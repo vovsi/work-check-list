@@ -23,7 +23,7 @@ final class Database
      */
     private const CHECKLIST_ITEMS = [
         ['code' => 'story_points', 'title' => 'Указать Story Points'],
-        ['code' => 'status_doing', 'title' => 'Статус сменен на Doing'],
+        ['code' => 'status_doing', 'title' => 'Перевести в статус Doing'],
         ['code' => 'git_branch', 'title' => 'Создать ветку в Git'],
         ['code' => 'code_written', 'title' => 'Закоммитить код'],
         ['code' => 'pull_request', 'title' => 'Создать PR'],

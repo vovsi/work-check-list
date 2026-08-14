@@ -18,6 +18,7 @@ final class JiraClient
         private readonly string $apiToken,
         private readonly string $storyPointsFieldId = 'customfield_10016',
         private readonly string $pullRequestStatusName = 'Pull request',
+        private readonly string $doingStatusName = 'Doing',
     ) {
     }
 
@@ -69,6 +70,24 @@ final class JiraClient
         );
     }
 
+    /** Переводит задачу в статус $doingStatusName (например «Doing») через Jira transitions API */
+    public function transitionToDoing(string $taskId): void
+    {
+        $transitionId = $this->findTransitionId($taskId, $this->doingStatusName);
+        if ($transitionId === null) {
+            throw new RuntimeException(
+                "В Jira не найден переход в статус «{$this->doingStatusName}» для задачи {$taskId}"
+            );
+        }
+
+        $this->request(
+            'POST',
+            '/rest/api/2/issue/' . rawurlencode($taskId) . '/transitions',
+            ['transition' => ['id' => $transitionId]],
+            "при переводе статуса задачи {$taskId}"
+        );
+    }
+
     /** Ищет id перехода по названию целевого статуса среди доступных для задачи переходов */
     private function findTransitionId(string $taskId, string $statusName): ?string
     {
@@ -81,7 +100,11 @@ final class JiraClient
         $transitions = is_array($data['transitions'] ?? null) ? $data['transitions'] : [];
 
         foreach ($transitions as $transition) {
-            if (isset($transition['name']) && strcasecmp((string) $transition['name'], $statusName) === 0) {
+            // Сравниваем с названием целевого статуса (transition.to.name), а не с названием
+            // самого перехода (transition.name) — это название кнопки-действия в workflow
+            // и может не совпадать с именем статуса, в который она ведёт.
+            $targetStatusName = (string) ($transition['to']['name'] ?? $transition['name'] ?? '');
+            if ($targetStatusName !== '' && strcasecmp($targetStatusName, $statusName) === 0) {
                 return (string) $transition['id'];
             }
         }

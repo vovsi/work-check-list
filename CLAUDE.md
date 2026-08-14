@@ -164,7 +164,7 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 | code | Заголовок | Сервис | Поведение |
 |---|---|---|---|
 | `story_points` | Story Points указано | Jira | Отмечается сразу |
-| `status_doing` | Статус сменен на Doing | Jira | Отмечается сразу |
+| `status_doing` | Перевести в статус Doing | Jira | Переводит задачу в Jira в статус из `config/params.ini` (`atlassian.doing_status`, по умолчанию «Doing») через `api/transition_doing.php` → отмечается только при успешном переходе в Jira (тот же паттерн, что у `status_pull_request`/`transition_pull_request.php`) |
 | `git_branch` | Создать ветку в Git | Git | Запросить название ветки → скопировать → сохранить в `tasks.git_branch` → отметить. Если ветка уже сохранена — кнопка «Оставить текущую» отмечает пункт без изменения `tasks.git_branch` |
 | `code_written` | Код написан | PHP | Показать команду `git push origin <ветка>` (та же, что в дропдауне «Push») → «Скопировать» копирует и отмечает |
 | `pull_request` | PR создан | GitHub | Запросить ссылку на PR → сохранить в `sessionStorage` (для пункта `send_pr`) → отметить |

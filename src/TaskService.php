@@ -118,6 +118,30 @@ final class TaskService
         ];
     }
 
+    /**
+     * Переводит задачу в Jira в статус Doing и отмечает пункт чек-листа выполненным.
+     * Пункт отмечается только при успешном переходе в Jira — по той же причине, что и
+     * updateStoryPoints() выше.
+     */
+    public function transitionToDoing(int $taskId, int $checklistId): array
+    {
+        $task = $this->tasks->findById($taskId);
+        if ($task === null) {
+            throw new RuntimeException('Задача не найдена');
+        }
+        if ($this->jiraSync === null) {
+            throw new RuntimeException('Интеграция с Jira не настроена — заполните config/params.ini');
+        }
+
+        $this->jiraSync->transitionToDoing($task);
+        $this->checklist->setDone($taskId, $checklistId, true);
+
+        return [
+            'task' => $task,
+            'checklist' => $this->checklist->getStatusesForTask($taskId),
+        ];
+    }
+
     /** Читает уже затреканное в Jira время (без побочных эффектов) — для отображения в модалке перед добавлением нового worklog */
     public function getTimeSpentSeconds(int $taskId): int
     {

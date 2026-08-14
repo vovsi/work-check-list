@@ -561,6 +561,61 @@ html[data-theme="dark"] .modal:has(.worktime) {
     flex: none;
 }
 
+/* Модалка поздравления при достижении дневной нормы часов (см. showCongratsModal в app.js) —
+   единственная кнопка по центру ряда действий, а не слева (как по умолчанию у одной кнопки
+   с justify-content: space-between в .modal-actions) */
+.congrats-modal {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+}
+
+.congrats-emoji {
+    font-size: 34px;
+    line-height: 1;
+    animation: congrats-pop 0.5s ease;
+}
+
+@keyframes congrats-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.6);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.congrats-text {
+    margin: 0;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.congrats-earnings {
+    margin: 0;
+    padding: 6px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    color: var(--success);
+    background: var(--surface-solid);
+}
+
+.congrats-quote {
+    margin: 4px 0 0;
+    font-size: 12.5px;
+    font-style: italic;
+    color: var(--text-secondary);
+}
+
+.modal:has(.congrats-modal) .modal-actions {
+    justify-content: center;
+}
+
 .error-text {
     margin-top: 10px;
     font-size: 12.5px;
