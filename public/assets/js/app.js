@@ -1299,6 +1299,7 @@
                     '</div>',
                 [
                     { label: 'Отмена', value: false },
+                    { label: 'Пропустить', value: true },
                     { label: 'Готово', primary: true, value: true },
                 ],
                 (bodyEl) => {
