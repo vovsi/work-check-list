@@ -23,7 +23,7 @@ final class JiraClient
     }
 
     /**
-     * @return array{title: string, description: ?string}
+     * @return array{title: string, description: ?string, story_points_set: bool}
      */
     public function fetchIssue(string $taskId): array
     {
@@ -31,7 +31,9 @@ final class JiraClient
         // так не нужно разбирать формат описания отдельно для Jira Cloud и Server.
         $data = $this->request(
             'GET',
-            '/rest/api/2/issue/' . rawurlencode($taskId) . '?fields=summary,description&expand=renderedFields',
+            '/rest/api/2/issue/' . rawurlencode($taskId)
+                . '?fields=summary,description,' . rawurlencode($this->storyPointsFieldId)
+                . '&expand=renderedFields',
             null,
             "для задачи {$taskId}"
         );
@@ -39,6 +41,7 @@ final class JiraClient
         return [
             'title' => (string) ($data['fields']['summary'] ?? ''),
             'description' => $data['renderedFields']['description'] ?? null,
+            'story_points_set' => ($data['fields'][$this->storyPointsFieldId] ?? null) !== null,
         ];
     }
 

@@ -58,10 +58,18 @@ final class TaskRepository
         $stmt->execute(['branch' => $branch, 'id' => $taskId]);
     }
 
-    public function updateJiraData(int $taskId, string $title, ?string $description): void
+    public function updateJiraData(int $taskId, string $title, ?string $description, bool $storyPointsSet): void
     {
-        $stmt = $this->db->prepare('UPDATE tasks SET title = :title, description = :description WHERE id = :id');
-        $stmt->execute(['title' => $title, 'description' => $description, 'id' => $taskId]);
+        $stmt = $this->db->prepare(
+            'UPDATE tasks SET title = :title, description = :description, story_points_set = :story_points_set
+             WHERE id = :id'
+        );
+        $stmt->execute([
+            'title' => $title,
+            'description' => $description,
+            'story_points_set' => $storyPointsSet ? 1 : 0,
+            'id' => $taskId,
+        ]);
     }
 
     public function delete(int $id): void

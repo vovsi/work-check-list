@@ -18,8 +18,19 @@ final class ChecklistRepository
      * работы над ней. Указаны через стабильный code, а не id/позицию — при добавлении,
      * удалении или переупорядочивании пунктов в Database::CHECKLIST_ITEMS список не
      * сломается, а новые пункты по умолчанию попадут в «обнуляемые».
+     * Сейчас пуст: `story_points` раньше был здесь, но с появлением
+     * HIDE_IF_STORY_POINTS_ALREADY_SET_CODE его видимость и так полностью управляется
+     * реальным статусом в Jira — форсировать is_done при сбросе больше не нужно, иначе
+     * пункт остаётся скрытым (как выполненный) даже когда Story Points в Jira не проставлен.
      */
-    private const ALWAYS_DONE_ON_RESET_CODES = ['story_points'];
+    private const ALWAYS_DONE_ON_RESET_CODES = [];
+
+    /**
+     * Пункт скрывается из чек-листа задачи, если в самой задаче Jira Story Points уже
+     * проставлен (tasks.story_points_set, обновляется при каждой синхронизации,
+     * см. JiraSyncService::sync) — тогда шаг не нужен, а не просто уже выполнен.
+     */
+    private const HIDE_IF_STORY_POINTS_ALREADY_SET_CODE = 'story_points';
 
     public function __construct(private readonly PDO $db)
     {
@@ -51,10 +62,15 @@ final class ChecklistRepository
             'SELECT c.id, c.code, c.title, tc.is_done
              FROM checklist c
              JOIN task_checklist tc ON tc.checklist_id = c.id
+             JOIN tasks t ON t.id = tc.task_id
              WHERE tc.task_id = :task_id
+               AND NOT (c.code = :hidden_code AND t.story_points_set = 1)
              ORDER BY c.sort_order'
         );
-        $stmt->execute(['task_id' => $taskId]);
+        $stmt->execute([
+            'task_id' => $taskId,
+            'hidden_code' => self::HIDE_IF_STORY_POINTS_ALREADY_SET_CODE,
+        ]);
 
         return array_map(
             static fn (array $row): array => [
@@ -97,6 +113,10 @@ final class ChecklistRepository
     {
         $stmt = $this->db->prepare('UPDATE task_checklist SET is_done = 0 WHERE task_id = :task_id');
         $stmt->execute(['task_id' => $taskId]);
+
+        if (self::ALWAYS_DONE_ON_RESET_CODES === []) {
+            return;
+        }
 
         $placeholders = implode(',', array_fill(0, count(self::ALWAYS_DONE_ON_RESET_CODES), '?'));
         $stmt = $this->db->prepare(

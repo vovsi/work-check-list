@@ -8,6 +8,10 @@ CREATE TABLE IF NOT EXISTS tasks (
     -- (см. TaskService::syncJiraIfMissing — тянутся один раз, дальше берутся из БД).
     title TEXT DEFAULT NULL,
     description TEXT DEFAULT NULL,
+    -- признак того, что в самой задаче Jira Story Points уже проставлен (обновляется при
+    -- каждой синхронизации, см. JiraSyncService::sync) — используется, чтобы скрывать пункт
+    -- чек-листа «Указать Story Points», когда он не нужен.
+    story_points_set INTEGER NOT NULL DEFAULT 0,
     git_branch TEXT DEFAULT NULL,
     stat TEXT NOT NULL DEFAULT 'active'
 );

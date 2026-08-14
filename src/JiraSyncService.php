@@ -43,7 +43,12 @@ final class JiraSyncService
     public function sync(array $task): array
     {
         $issue = $this->client->fetchIssue($task['task_id']);
-        $this->tasks->updateJiraData((int) $task['id'], $issue['title'], $issue['description']);
+        $this->tasks->updateJiraData(
+            (int) $task['id'],
+            $issue['title'],
+            $issue['description'],
+            $issue['story_points_set']
+        );
 
         return $this->tasks->findById((int) $task['id']);
     }

@@ -112,6 +112,9 @@ final class Database
         if (!in_array('description', $columns, true)) {
             $pdo->exec('ALTER TABLE tasks ADD COLUMN description TEXT');
         }
+        if (!in_array('story_points_set', $columns, true)) {
+            $pdo->exec('ALTER TABLE tasks ADD COLUMN story_points_set INTEGER NOT NULL DEFAULT 0');
+        }
     }
 
     /**
