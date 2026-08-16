@@ -1756,10 +1756,16 @@
      * заменяется локальной заглушкой, а строка заработка просто не показывается).
      */
     async function showCongratsModal(totalSecondsToday) {
-        const [earnings, quote] = await Promise.all([
-            apiCall('../api/calc_earnings.php', { seconds: totalSecondsToday }).catch(() => null),
-            apiCall('../api/generate_motivation_quote.php', {}).catch(() => null),
-        ]);
+        showGlobalLoader();
+        let earnings, quote;
+        try {
+            [earnings, quote] = await Promise.all([
+                apiCall('../api/calc_earnings.php', { seconds: totalSecondsToday }).catch(() => null),
+                apiCall('../api/generate_motivation_quote.php', {}).catch(() => null),
+            ]);
+        } finally {
+            hideGlobalLoader();
+        }
 
         const earningsHtml = earnings && earnings.earnings_uah > 0
             ? `<p class="congrats-earnings">Ты заработал сегодня <strong>+${formatUah(earnings.earnings_uah)}</strong> 💸</p>`

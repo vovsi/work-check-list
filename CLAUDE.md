@@ -47,12 +47,30 @@
 
 ```
 database/schema.sql       — схема SQLite (tasks, checklist, task_checklist)
+config/params.ini         — конфиг интеграций (Jira, LLM, GitHub, рабочий день, зарплата),
+                             в git не попадает — см. config/params.ini.example и раздел
+                             «Конфигурация» ниже
 src/
   bootstrap.php            — автозагрузчик классов App\* (без composer)
   Database.php             — подключение к БД + миграции + сидинг чек-листа (Singleton)
-  TaskRepository.php        — CRUD по таблице tasks (Repository)
-  ChecklistRepository.php   — CRUD/бизнес-правила по checklist и task_checklist (Repository)
-  TaskService.php            — оркестрация «найти-или-создать задачу + подготовить чек-лист»
+  Config.php               — чтение/валидация config/params.ini с дефолтами (Repository-подобный
+                             ленивый статический кэш, тот же приём, что у Database::connection())
+  TaskRepository.php       — CRUD по таблице tasks (Repository)
+  ChecklistRepository.php  — CRUD/бизнес-правила по checklist и task_checklist (Repository)
+  TaskService.php          — оркестрация «найти-или-создать задачу + подготовить чек-лист»,
+                             фасад над Jira-интеграцией (JiraSyncService)
+  JiraClient.php           — низкоуровневый HTTP-клиент Jira REST API v2 (Client)
+  JiraSyncService.php      — Service поверх JiraClient + TaskRepository: синхронизация,
+                             переходы статусов, время; опциональность интеграции — в
+                             JiraSyncService::createFromConfig()
+  LlmClient.php            — общий транспортный клиент к локальной нейронке (Client),
+                             не знает про конкретные промпты
+  BranchNameService.php    — генерация имени git-ветки через LlmClient (Service)
+  CommitMessageService.php — генерация commit message через LlmClient (Service)
+  DeployInstructionService.php — форматирование инструкции выливки для PR через LlmClient (Service)
+  MotivationQuoteService.php — мотивационная цитата через LlmClient (Service)
+  EarningsService.php      — расчёт заработка в UAH за отработанное время (Service)
+  ExchangeRateClient.php   — курс USD→UAH с open.er-api.com, файловый кэш на 6 часов (Client)
 api/
   _bootstrap.php            — общий бутстрап для эндпоинтов (автозагрузка, JSON in/out)
   task.php                  — POST: найти/создать задачу (без сброса чек-листа для существующей)
@@ -60,11 +78,24 @@ api/
   toggle.php                — POST: отметить пункт чек-листа
   finish.php                — POST: сбросить чек-лист («Завершить задачу»)
   delete_task.php            — POST: полностью удалить задачу и её чек-лист
+  today_time_spent.php       — POST: read-only затреканное сегодня время по всем задачам
+  get_time_spent.php         — POST: read-only уже затреканное время по одной задаче
+  log_time_quick.php         — POST: затрекать время без отметки пункта чек-листа
+  log_time.php               — POST: затрекать время + отметить пункт чек-листа `time_tracking`
+  update_story_points.php    — POST: проставить Story Points в Jira + отметить пункт
+  transition_doing.php       — POST: перевести задачу в Jira в статус Doing + отметить пункт
+  transition_pull_request.php — POST: перевести задачу в Jira в статус Pull Request + отметить пункт
+  generate_branch_name.php   — POST: сгенерировать имя git-ветки (LLM)
+  generate_commit_message.php — POST: сгенерировать commit message (LLM)
+  generate_deploy_instruction.php — POST: оформить инструкцию выливки для PR (LLM)
+  generate_motivation_quote.php — POST: сгенерировать мотивационную цитату (LLM)
+  calc_earnings.php          — POST: посчитать заработок в UAH за отработанные секунды
 public/
   index.php                 — единственная HTML-страница приложения
   assets/css/style.css      — стили (светлая/тёмная тема, glass-эффект в духе macOS)
   assets/js/app.js          — вся клиентская логика (один файл, IIFE, без модулей)
-storage/app.sqlite          — файл БД, создаётся автоматически, в git не попадает
+storage/                    — файл БД (app.sqlite) + файловый кэш курса валют
+                             (exchange_rate_cache.json), создаются автоматически, в git не попадают
 Dockerfile, docker-compose.yml — контейнерный запуск, весь проект смонтирован как volume
 ```
 
@@ -86,12 +117,32 @@ Dockerfile, docker-compose.yml — контейнерный запуск, вес
 ### Паттерны, используемые в коде, и почему
 
 - **Singleton** — `Database::connection()`. Одно соединение с SQLite на процесс,
-  инкапсулирует миграции при первом обращении.
+  инкапсулирует миграции при первом обращении. Тот же приём (ленивый статический кэш) — у
+  `Config::load()` для `config/params.ini`, только без соединения с внешним ресурсом.
 - **Repository** — `TaskRepository`, `ChecklistRepository`. Изолируют SQL от остального кода;
   если менять СУБД или схему — трогать нужно только их.
 - **Service (оркестрация use-case)** — `TaskService::findOrCreateByLink()`. Инкапсулирует
   правило «если задача уже была в БД — вернуть её текущий чек-лист как есть, если новая —
-  создать пустой», не заставляя `api/task.php` знать детали.
+  создать пустой», не заставляя `api/task.php` знать детали. Тот же принцип на уровень ниже —
+  `JiraSyncService` (оркестрирует `JiraClient` + `TaskRepository`; опциональность интеграции с
+  Jira инкапсулирована в фабричном методе `JiraSyncService::createFromConfig()` — без настроенной
+  Jira `TaskService` получает `null` вместо сервиса и просто пропускает шаги синхронизации,
+  не роняя открытие задачи).
+- **Client (транспорт без бизнес-логики)** — `JiraClient` (Jira REST API v2, Basic Auth
+  email+token), `LlmClient` (локальная нейронка, `POST <host>/api/v1/chat`), `ExchangeRateClient`
+  (курс USD→UAH с `open.er-api.com`, файловый кэш `storage/exchange_rate_cache.json` на 6 часов,
+  при недоступности сервиса — cache-aside: отдаётся последний закэшированный курс). Каждый
+  Client не знает, из-за какого сценария использования его вызвали.
+- **Один Client + N Service с разными промптами (LLM-интеграция, DRY)** — `LlmClient` ничего не
+  знает о конкретных промптах, только шлёт `{model, system_prompt, input}` и гибко разбирает
+  разные форматы ответа LLM-серверов. Поверх него — четыре тонких Service, у каждого свой
+  фиксированный системный промпт под одну задачу: `BranchNameService` (имя git-ветки, пункт
+  `git_branch`), `CommitMessageService` (commit message, пункт `code_written`),
+  `DeployInstructionService` (инструкция выливки для PR, пункт `deploy_instruction`),
+  `MotivationQuoteService` (мотивационная цитата для модалки поздравления, см. бизнес-правила).
+  Конфиг для всех четырёх один — `Config::llm()` (`[llm]` → `host`/`model` в
+  `config/params.ini`). Добавляя новую LLM-фичу — не пиши новый HTTP-клиент, добавь ещё один
+  Service поверх `LlmClient`.
 - **Identifier decoupled from position (стабильный `code`)** — у каждого пункта чек-листа
   есть неизменяемый `code` (например `git_branch`), отдельно от `id`/`sort_order`. Бизнес-правила
   (`ChecklistRepository::ALWAYS_DONE_ON_RESET_CODES`) и фронтовые обработчики (`ITEM_HANDLERS` в
@@ -111,23 +162,60 @@ Dockerfile, docker-compose.yml — контейнерный запуск, вес
 ## База данных
 
 ```sql
-tasks(id, task_link UNIQUE, task_id, git_branch, stat)
+tasks(id, task_link UNIQUE, task_id, title, description, story_points_set, git_branch, stat)
 checklist(id, code UNIQUE, title, sort_order)
 task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id))
 ```
 
 - `tasks.task_link` / `tasks.task_id` — по ним ищется существующая задача (`TaskRepository::findByLinkOrTaskId`).
+- `tasks.title` / `tasks.description` — заголовок и описание из Jira, перечитываются при
+  каждом открытии задачи (`syncJira()`, см. бизнес-правила ниже); используются также как вход
+  для LLM-генерации (`BranchNameService`, `CommitMessageService`).
+- `tasks.story_points_set` — признак того, что в самой задаче Jira Story Points уже проставлен,
+  обновляется при каждой синхронизации — см. правило показа пункта `story_points` ниже.
 - `tasks.git_branch` — сохраняется независимо от чек-листа, показывается внизу экрана
   всегда, если задано (не зависит от состояния пункта «Создать ветку в Git»).
 - `checklist.code` — единственный стабильный идентификатор смысла пункта, см. выше.
 - `checklist.sort_order` — порядок отображения; можно менять свободно.
 - `task_checklist.is_done` — состояние конкретного пункта у конкретной задачи.
 
+Курс валют для расчёта заработка (`ExchangeRateClient`) кэшируется не в SQLite, а в отдельном
+файле `storage/exchange_rate_cache.json` (`{rate, fetched_at}`, TTL 6 часов) — это не часть
+постоянной схемы задач/чек-листа, поэтому в таблицы не попадает.
+
 Список пунктов чек-листа — **единственный источник правды**: `Database::CHECKLIST_ITEMS`.
 При каждом запросе к БД (`Database::migrate()`) этот массив синхронизируется в таблицу
 `checklist` через upsert по `code` (`seedChecklist`) и удаляет пункты, которых больше нет в
 массиве, вместе с их отметками (`pruneRemovedItems`). **Чтобы добавить, удалить или
 переименовать пункт чек-листа — правь только этот массив.** Ничего больше менять не требуется.
+
+## Конфигурация (`config/params.ini`)
+
+Не в git, читается лениво и кэшируется на процесс через `Config` (см. «Паттерны» выше). Шаблон
+с описанием всех ключей — `config/params.ini.example`. Секции:
+
+- **`[atlassian]`** — `base_url`/`email`/`api_token` (обязательны для любой Jira-интеграции;
+  без них `JiraSyncService::createFromConfig()` возвращает `null`, и все Jira-фичи молча
+  отключаются, не ломая открытие задачи), `story_points_field` (ID кастомного поля Story Points,
+  по умолчанию `customfield_10016`), `doing_status`/`pull_request_status` (названия статусов
+  для переходов, по умолчанию `Doing`/`Pull request`).
+- **`[worktime]`** — `start`/`end`/`daily_hours`/`lunch_start`/`lunch_end`, разбор и дефолты —
+  `Config::workTime()` (см. использование в ползунке трека времени во Frontend ниже).
+  `daily_hours` также используется как порог показа модалки поздравления (см. бизнес-правила).
+- **`[llm]`** — `host`/`model` локальной нейронки (без ключа, протокол `POST <host>/api/v1/chat`,
+  см. «Один Client + N Service» в Паттернах). Без этой секции `Config::llm()` бросает
+  исключение — все четыре LLM-эндпоинта отвечают 502.
+- **`[github]`** — `reviewers` (список ников через запятую) для флага `--reviewer` в команде
+  `gh pr create` на шаге `pull_request` (`Config::githubReviewers()`, прокидывается на фронт
+  через `window.DEVFLOW_CONFIG.githubReviewers` в `public/index.php`). Не задано — флаг просто
+  не добавляется в команду.
+- **`[salary]`** — `monthly_usd`/`working_days_per_month` (дефолты 1500/21,
+  `Config::SALARY_DEFAULTS`) для расчёта часовой ставки (`Config::salaryHourlyRateUsd()` =
+  `monthly_usd / (working_days_per_month * daily_hours)`) — единственный потребитель:
+  `EarningsService` в модалке поздравления.
+
+Некорректные/отсутствующие значения `[worktime]` и `[salary]` молча заменяются дефолтами (не
+роняют приложение); отсутствие `[atlassian]`/`[llm]` отключает соответствующие фичи целиком.
 
 ## Бизнес-правила чек-листа
 
@@ -159,7 +247,13 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
   `.done` (не только `.locked`) — пункт остаётся кликабельным ~0.5с до улёта, а замыкание
   держит устаревший объект `item` (`state.checklist` к этому моменту уже заменён новым
   массивом из ответа API), поэтому проверка `item.is_done` внутри обработчика не спасает —
-  нужна проверка по классу самого DOM-элемента.
+  нужна проверка по классу самого DOM-элемента. **Исключение из строгой очерёдности** — кнопка
+  «Перейти сюда» (`.jump-here-btn`, есть у каждого видимого пункта) → `jumpToItem()` в `app.js`:
+  массово отмечает выполненными все пункты выше выбранного напрямую через `api/toggle.php`
+  (`is_done: true`), **без вызова их реальных обработчиков** — побочные эффекты пункта (ветка,
+  ссылка на PR, переход статуса в Jira и т.п.) при этом не выполняются и не сохраняются, пункт
+  просто пропускается. Осознанный «эскейп-люк» на случай, когда шаг уже сделан вручную вне
+  приложения — не расширяй его на обработчик самого пункта.
 - **Прогресс-бар** — процент `is_done` от общего числа пунктов данной задачи, пересчитывается
   при каждом изменении состояния.
 - **Пункт «Указать Story Points» показывается только если в задаче Jira Story Points
@@ -170,44 +264,73 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
   (`HIDE_IF_STORY_POINTS_ALREADY_SET_CODE`), а не на фронте: пункт полностью выпадает из
   ответа API для всех эндпоинтов сразу, без дублирования правила в каждом месте, где читается
   чек-лист.
+- **Достижение дневной нормы часов → модалка поздравления.** Не пункт чек-листа, а побочный
+  эффект успешного трека времени: `showCongratsModal()` (`app.js`) вызывается из
+  `openQuickTrackModal()` сразу после успешной отправки worklog в Jira, если норма
+  `[worktime].daily_hours` достигнута **впервые за сегодня** —
+  `alreadySeconds < normSeconds && totalSecondsToday >= normSeconds`, где `alreadySeconds` — то,
+  что было затрекано до этого конкретного трека. Условие чисто арифметическое, без
+  сохранения где-либо факта «уже показывали сегодня» — сверхурочный трек после того, как норма
+  уже была выполнена ранее в тот же день, модалку не повторяет. Срабатывает из обеих точек
+  входа в `openQuickTrackModal()` — кружка быстрого трека и пункта `time_tracking`.
+  Модалка параллельно и независимо (`Promise.all`, у каждого запроса свой `.catch(() => null)`)
+  подгружает: заработок за отработанные сегодня секунды (`api/calc_earnings.php` →
+  `EarningsService`, строка «Ты заработал сегодня +N грн 💸» не показывается, если запрос не
+  удался или сумма ⩽ 0) и мотивационную цитату (`api/generate_motivation_quote.php` →
+  `MotivationQuoteService`, при ошибке — случайная из локального фолбэк-массива
+  `MOTIVATION_QUOTES_FALLBACK`, 5 фраз в `app.js`, чтобы модалка не зависела от нейронки).
+  Ошибка одного из двух запросов не блокирует показ модалки и не прячет результат второго.
+  Единственная кнопка — «Спасибо!». Индикация загрузки — третий способ из раздела ниже
+  (`showGlobalLoader()`/`hideGlobalLoader()` вокруг `Promise.all`): к моменту вызова кнопка
+  «Затрекать» уже закрыла модалку и свою собственную индикацию через `setButtonLoading`, так
+  что спиннер показать не на чем — тот же случай, что у `deleteRecentTask()`/`restoreTask()`.
 
 ## Пункты чек-листа и их поведение (`code` → поведение при клике)
 
+Во всех эндпоинтах ниже `task_id` в запросе — это `tasks.id` (внутренний числовой PK), **кроме**
+`generate_commit_message.php`, где `task_id` — это Jira-ключ строкой (`tasks.task_id`); см. «API».
+
 | code | Заголовок | Сервис | Поведение |
 |---|---|---|---|
-| `story_points` | Story Points указано | Jira | Отмечается сразу |
+| `story_points` | Указать Story Points | Jira | Модалка выбора значения (`STORY_POINTS_OPTIONS`: 1/2/3/5/8/13, с описанием сложности для каждого) → «Подтвердить» отправляет `api/update_story_points.php` → отмечается только при успешном ответе Jira (тот же паттерн, что у `status_doing`/`status_pull_request`) |
 | `status_doing` | Перевести в статус Doing | Jira | Переводит задачу в Jira в статус из `config/params.ini` (`atlassian.doing_status`, по умолчанию «Doing») через `api/transition_doing.php` → отмечается только при успешном переходе в Jira (тот же паттерн, что у `status_pull_request`/`transition_pull_request.php`) |
-| `git_branch` | Создать ветку в Git | Git | Запросить название ветки → скопировать → сохранить в `tasks.git_branch` → отметить. Если ветка уже сохранена — кнопка «Оставить текущую» отмечает пункт без изменения `tasks.git_branch` |
-| `code_written` | Код написан | PHP | Показать команду `git push origin <ветка>` (та же, что в дропдауне «Push») → «Скопировать» копирует и отмечает |
-| `pull_request` | PR создан | GitHub | Запросить ссылку на PR → сохранить в `sessionStorage` (для пункта `send_pr`) → отметить |
-| `claude_review` | Проверить PR Claude Code | Claude | Показать промпт для ревью (со ссылкой на PR из `sessionStorage`, шаг `pull_request`), кнопка «Скопировать» в теле окна копирует без отметки (можно повторять) → «Готово» в панели действий отмечает |
-| `deploy_instruction` | Указать инструкцию выливки | GitHub | Многострочное поле для сырой инструкции → «Сгенерировать» отправляет её в нейронку (`api/generate_deploy_instruction.php` → `DeployInstructionService`), которая оформляет markdown-описание для PR по фиксированному шаблону («!!! ВАЖНО !!! / Перед мерджем сделать следующее: / <инструкция>», первая строка жирная и красная, вторая жирная, содержимое инструкции не меняется по смыслу) → результат копируется в буфер сразу и показывается в теле окна (можно генерировать повторно) → «Готово» в панели действий отмечает |
-| `jira_description` | Оставить описание в Jira | Jira | Показать HTML-текст с форматированием → «Скопировать» копирует (сохраняя стиль через `ClipboardItem`) и отмечает |
+| `git_branch` | Создать ветку в Git | Git | Запросить название ветки (кнопка «Сгенерировать» предлагает вариант через `api/generate_branch_name.php` → `BranchNameService`, LLM по заголовку/описанию задачи из Jira) → скопировать → сохранить в `tasks.git_branch` → отметить. Если ветка уже сохранена — кнопка «Оставить текущую» отмечает пункт без изменения `tasks.git_branch` |
+| `code_written` | Закоммитить код | PHP | Модалка с полем «Опишите что сделали» → кнопка «Сгенерировать Description» отправляет текст в `api/generate_commit_message.php` → `CommitMessageService` (LLM формирует commit message по Conventional Commits + ключ задачи) — результат копируется в буфер сразу и показывается в теле окна (генерацию можно повторять) → кнопка «Закоммитил и Запушил» отмечает пункт. Команда `git push origin <ветка>` к этому пункту не относится — она отдельно живёт в дропдауне git-команд у названия ветки (`GIT_ACTION_COMMANDS.push`, см. Frontend ниже) |
+| `pull_request` | Создать PR | GitHub | Шаг 1 — показать команду `gh pr create --draft ...` (ревьюверы из `config/params.ini`, `github.reviewers`, собирается в `buildGhPrCreateCommand()`) с кнопкой «Скопировать»; шаг 2 — запросить ссылку на созданный PR → сохранить в `sessionStorage` (читают пункты `claude_review`, `jira_description`, `send_pr`) → отметить |
+| `claude_review` | Проверить PR Claude Code | Claude | Показать промпт для ревью (со ссылкой на PR из `sessionStorage`, шаг `pull_request`), кнопка «Скопировать» в теле окна копирует без отметки (можно повторять) → «Готово» в панели действий отмечает. После отметки — вопрос «Есть ещё один проект?»: при «Да» откатывает пункты `code_written`/`pull_request`/`claude_review` (`rewindTo('code_written')`, сам `claude_review` при этом не отмечается) для повторного цикла коммит→PR→ревью по второму репозиторию мультирепо-задачи |
+| `deploy_instruction` | Указать инструкцию выливки | GitHub | Многострочное поле для сырой инструкции → «Сгенерировать» отправляет её в нейронку (`api/generate_deploy_instruction.php` → `DeployInstructionService`), которая оформляет markdown-описание для PR по фиксированному шаблону (`### ❗ **ВАЖНО** ❗` / `**Перед мерджем сделать следующее:**` / `<инструкция>` — эмодзи вместо цветного текста, потому что GitHub вырезает inline-стили из описания PR; смысл инструкции не меняется, код/идентификаторы копируются символ-в-символ) → результат копируется в буфер сразу и показывается в теле окна с отдельной кнопкой повторного копирования (генерацию можно повторять) → панель действий из 3 кнопок: «Отмена» / «Пропустить» / «Готово» — и «Пропустить», и «Готово» отмечают пункт |
+| `status_ready_for_review` | PR`s переведены в Ready for review | GitHub | Отмечается сразу по клику — без модалки и без сетевого запроса (`markDone(item.id)`) |
+| `jira_description` | Оставить описание в Jira | Jira | Показать HTML-текст с форматированием, кнопки «Скопировать» (копирует с форматированием через `ClipboardItem`) и «Скопировать PR» (ссылка на PR из шага `pull_request`) — обе не отмечают пункт, можно повторять → «Готово» в панели действий отмечает |
 | `status_pull_request` | Перевести задачу в Pull Request | Jira | Переводит задачу в Jira в статус из `config/params.ini` (`atlassian.pull_request_status`, по умолчанию «Pull request») через `api/transition_pull_request.php` → отмечается только при успешном переходе в Jira (тот же паттерн, что у `story_points`/`update_story_points.php`) |
-| `time_tracking` | Затрекать время | Jira | Прочитать затреканное за сегодня (`api/today_time_spent.php`) и по этой задаче (`api/get_time_spent.php`, оба read-only) → открыть **ту же модалку с ползунком, что и кружок быстрого трека** (`openQuickTrackModal()`, строкой сверху затреканное в задачу) → добавить worklog в Jira (`api/log_time.php`) → отметить (тот же паттерн, что у `story_points`/`status_pull_request`) |
+| `time_tracking` | Затрекать время | Jira | Прочитать затреканное за сегодня (`api/today_time_spent.php`) и по этой задаче (`api/get_time_spent.php`, оба read-only) → открыть **ту же модалку с ползунком, что и кружок быстрого трека** (`openQuickTrackModal()`, строкой сверху затреканное в задачу) → добавить worklog в Jira (`api/log_time.php`) → отметить (тот же паттерн, что у `story_points`/`status_pull_request`). Если это первый трек, доводящий сумму за день до нормы — см. модалку поздравления в бизнес-правилах |
 | `send_pr` | Отправить PR ревьюверу | Telegram | Модалка без текста-превью: кнопки копирования «Скопировать Link to PR» / «Скопировать Details template» (шаблон с `task_id` и ссылкой на PR из шага `pull_request`) в теле окна — не отмечают пункт, можно повторять → «Готово» в панели действий отмечает |
 
 Модалки с несколькими действиями следуют единому расположению кнопок: повторяемые действия
-копирования — отдельные кнопки (`.btn` внутри `.modal-copy-actions`) сверху тела модалки;
-«Отмена» и финальная кнопка (`«Сохранить»`/`«Готово»`) — в нижней панели
-действий (`.modal-actions`, `justify-content: space-between`), Отмена слева, финальная кнопка
-справа. Так сделаны `claude_review` и `send_pr`; остальные модалки с одной кнопкой-действием
-(например `code_written`, `jira_description`) укладываются в тот же нижний ряд «Отмена слева /
-действие справа» без отдельной группы копирования.
+копирования/генерации — отдельные кнопки (`.btn` внутри `.modal-copy-actions`) сверху тела
+модалки; «Отмена» и финальная кнопка(и) — в нижней панели действий (`.modal-actions`, порядок
+описан в стандарте по числу кнопок ниже). Группа `.modal-copy-actions` есть у `git_branch`
+(«Сгенерировать» / «Скопировать»), `code_written` («Сгенерировать Description»),
+`claude_review` («Скопировать»), `deploy_instruction` («Сгенерировать», затем отдельная
+«Скопировать» после генерации), `jira_description` («Скопировать» / «Скопировать PR»),
+`send_pr` («Скопировать Link to PR» / «Скопировать Details template»). Без отдельной группы
+копирования — `story_points` (модалка с radio-выбором, без копирования) и `pull_request`
+(своя кнопка копирования команды внутри разметки шагов `.pr-steps`, не через
+`.modal-copy-actions`).
 
 **Стандарт для панели действий (`.modal-actions`) по числу кнопок — обязателен при добавлении
 новых модалок:**
 - **2 кнопки** («Отмена» + финальная, либо любая другая пара) — горизонтальный ряд,
   `justify-content: space-between`, первая кнопка слева, вторая справа. Это единственный
   случай, где горизонтальное расположение допустимо.
-- **3+ кнопки** (например «Отмена» / «Оставить текущую» / «Сохранить» у `git_branch`) —
-  горизонтальный ряд на ширине 500×500 **не помещается** и рвётся неровно (часть кнопок
-  переносится на свою строку, часть остаётся в предыдущей — визуально хаотично). Обязателен
-  вертикальный full-width стек: `.modal-actions--stacked` (`flex-direction: column`, каждая
-  кнопка `width: 100%`), порядок кнопок сохраняется как передан в `buttons` (Отмена — первая/
-  верхняя, финальная кнопка — последняя/нижняя). Класс переключается автоматически в
-  `showModal()` по `buttons.length > 2` — при добавлении новой модалки с 3+ кнопками ничего
-  дополнительно делать не нужно, просто не нарушай этот автоматизм ручной вёрсткой кнопок.
+- **3+ кнопки** (например «Отмена» / «Оставить текущую» / «Сохранить» у `git_branch`, или
+  «Отмена» / «Пропустить» / «Готово» у `deploy_instruction`) — горизонтальный ряд на ширине
+  500×500 **не помещается** и рвётся неровно (часть кнопок переносится на свою строку, часть
+  остаётся в предыдущей — визуально хаотично). Обязателен вертикальный full-width стек:
+  `.modal-actions--stacked` (`flex-direction: column`, каждая кнопка `width: 100%`), порядок
+  кнопок сохраняется как передан в `buttons` (Отмена — первая/верхняя, финальная кнопка —
+  последняя/нижняя). Класс переключается автоматически в `showModal()` по `buttons.length > 2` —
+  при добавлении новой модалки с 3+ кнопками ничего дополнительно делать не нужно, просто не
+  нарушай этот автоматизм ручной вёрсткой кнопок.
 - Кнопки копирования в `.modal-copy-actions` в это правило не входят — это отдельная зона
   сверху тела модалки, а не часть `.modal-actions`.
 
@@ -382,6 +505,23 @@ JQL-поиск `worklogAuthor = currentUser() AND worklogDate >= startOfDay()` �
 подсветка относительно нормы, и объём добавляемого времени). Периодического опроса по таймеру
 нет и не нужно.
 
+### `POST /api/get_time_spent.php` — уже затреканное время по одной задаче (read-only)
+
+Запрос: `{ "task_id": 1 }`
+
+Read-only (`TaskService::getTimeSpentSeconds` → `JiraSyncService::getTimeSpentSeconds` →
+`JiraClient::fetchTimeSpentSeconds`): в отличие от `today_time_spent.php` не по всем задачам
+пользователя, а по одной конкретной, и требует `task_id`. 422, если не передан `task_id`; 502 —
+задача не найдена в БД, интеграция с Jira не настроена, либо ошибка самой Jira (все три случая
+неразличимы по коду ответа, различается только текст `error`).
+
+Ответ: `{ "time_spent_seconds": 1200 }`
+
+Вызывается из обработчика `time_tracking` в `ITEM_HANDLERS` параллельно с
+`today_time_spent.php` (`Promise.all`) перед открытием модалки трека времени — оба числа нужны
+сразу: одно для позиции ползунка (за сегодня по всем задачам), другое для строки «Уже
+затрекано в задачу: …» над ним.
+
 ### `POST /api/log_time_quick.php` — быстрый трек времени в текущую задачу
 
 Запрос: `{ "task_id": 1, "minutes": 95 }`
@@ -395,6 +535,163 @@ JQL-поиск `worklogAuthor = currentUser() AND worklogDate >= startOfDay()` �
 
 Вызывается из модалки быстрого трека времени (`openQuickTrackModal()` в `app.js`), после
 успеха фронт перезапрашивает индикатор через `loadTodayTimeSpent()`.
+
+### `POST /api/log_time.php` — затрекать время и отметить пункт чек-листа
+
+Запрос: `{ "task_id": 1, "checklist_id": 3, "hours": 1, "minutes": 35 }`
+
+`hours`/`minutes` складываются в секунды (`hours*3600 + minutes*60`). Логика
+(`TaskService::logTime` → `logTimeOnly` → `JiraSyncService::addWorklog`) переиспользует тот же
+`logTimeOnly()`, что и `log_time_quick.php`, и дополнительно отмечает пункт чек-листа
+выполненным — **только при успешном ответе Jira** (в отличие от `log_time_quick.php`, который
+чек-лист вообще не трогает). 422 — не переданы `task_id`/`checklist_id` либо итоговое время
+⩽ 0; 502 — задача не найдена / интеграция с Jira не настроена / ошибка Jira.
+
+Ответ: `{ "task": {...}, "checklist": [...] }`
+
+Вызывается как `submit` внутри `openQuickTrackModal()` из обработчика пункта `time_tracking` —
+единственное отличие от кружка быстрого трека (который вызывает `log_time_quick.php`) в этом
+и есть: свой эндпоинт + своя отметка пункта.
+
+### `POST /api/update_story_points.php` — проставить Story Points в Jira
+
+Запрос: `{ "task_id": 1, "checklist_id": 3, "story_points": 5 }`
+
+Логика (`TaskService::updateStoryPoints`): требует настроенную интеграцию с Jira → проставляет
+Story Points в самой задаче Jira (`JiraSyncService::updateStoryPoints` → `JiraClient`,
+кастомное поле — `Config::atlassianStoryPointsField()`) → отмечает пункт чек-листа выполненным
+— только при успешном ответе Jira (тот же паттерн, что у `transition_doing.php`/
+`transition_pull_request.php` ниже). 422 — не переданы `task_id`/`checklist_id`/`story_points`
+(или `story_points ⩽ 0`); 502 — задача не найдена / интеграция с Jira не настроена / ошибка Jira
+(неразличимо по коду ответа, только по тексту `error`).
+
+Ответ: `{ "task": {...}, "checklist": [...] }`
+
+Вызывается из обработчика `story_points` в `ITEM_HANDLERS` — кнопка «Подтвердить» в модалке
+выбора значения (`keepOpen`, спиннер через `setButtonLoading`, модалка закрывается вручную
+только при успехе).
+
+### `POST /api/transition_doing.php` — перевести задачу в Jira в статус Doing
+
+Запрос: `{ "task_id": 1, "checklist_id": 3 }`
+
+Логика (`TaskService::transitionToDoing`): требует настроенную интеграцию с Jira → переводит
+задачу в статус из `config/params.ini` (`atlassian.doing_status`, по умолчанию «Doing») через
+`JiraClient::transitionToDoing` → отмечает пункт чек-листа выполненным только при успехе.
+422/502 — та же схема, что у `update_story_points.php`.
+
+Ответ: `{ "task": {...}, "checklist": [...] }`
+
+Вызывается из обработчика `status_doing` в `ITEM_HANDLERS` — без модалки, прямо по клику,
+индикация через `setItemLoading(item.id, true)`.
+
+### `POST /api/transition_pull_request.php` — перевести задачу в Jira в статус Pull Request
+
+Запрос: `{ "task_id": 1, "checklist_id": 3 }`
+
+Логика (`TaskService::transitionToPullRequest`): аналогично `transition_doing.php`, статус — из
+`atlassian.pull_request_status` (по умолчанию «Pull request»). 422/502 — та же схема.
+
+Ответ: `{ "task": {...}, "checklist": [...] }`
+
+Вызывается из обработчика `status_pull_request` в `ITEM_HANDLERS` — без модалки,
+`setItemLoading`.
+
+### LLM-эндпоинты — общее для всех четырёх
+
+`generate_branch_name.php`, `generate_commit_message.php`, `generate_deploy_instruction.php` и
+`generate_motivation_quote.php` устроены одинаково: читают `Config::llm()` (`[llm].host`/`model`)
+и зовут `LlmClient::chat()` через свой Service (см. «Один Client + N Service» в разделе
+«Паттерны») — 502, если LLM не настроен или ответил ошибкой. Ни один из четырёх не пишет
+ничего в БД напрямую.
+
+### `POST /api/generate_branch_name.php` — сгенерировать имя git-ветки
+
+Запрос: `{ "task_id": 1 }`
+
+Логика: ищет задачу по `task_id` (`tasks.id`) → **404**, если не найдена; **422**, если у
+задачи ещё нет `title` (Jira ни разу не синхронизировалась успешно — переоткрыть задачу или
+проверить `config/params.ini`) → `BranchNameService::generate()` строит промпт из Jira-ключа,
+заголовка и описания (описание предварительно очищается от HTML) → ответ чистится от
+кавычек/бэктиков и описание в имени ветки принудительно обрезается до 5 слов без служебных
+слов — подстраховка на случай, если нейронка не соблюдёт системный промпт точно. 502 — LLM не
+настроен/ошибка нейронки.
+
+Ответ: `{ "branch_name": "feature/PROJ-123-..." }`
+
+Вызывается кнопкой «Сгенерировать» внутри модалки пункта `git_branch` — заполняет поле ввода
+ветки результатом, индикация через `setButtonLoading`.
+
+### `POST /api/generate_commit_message.php` — сгенерировать commit message
+
+Запрос: `{ "description": "текст изменений", "task_id": "PROJ-123", "task_link": "https://.../browse/PROJ-123" }`
+
+**Внимание — единственный эндпоинт, где `task_id` не `tasks.id`, а Jira-ключ строкой**
+(`state.task.task_id` на фронте) — этот эндпоинт вообще не обращается к БД. `task_id`/
+`task_link` необязательны (пустая строка допустима), обязателен только `description` (422 при
+пустом значении).
+
+Логика (`CommitMessageService::generate()`): собирает промпт (Jira-ключ + ссылка на задачу +
+описание) по стандарту команды — Conventional Commits с `#JIRA-KEY` в начале subject — и зовёт
+`LlmClient::chat()`; ответ возвращается как есть, без дополнительной пост-обработки (в отличие
+от `generate_branch_name.php`).
+
+Ответ: `{ "message": "#PROJ-123 feat: ...\n\n<ссылка на задачу>\n\n..." }`
+
+Вызывается кнопкой «Сгенерировать Description» внутри модалки пункта `code_written` —
+результат сразу копируется в буфер (`notifyCopied('commit message')`) и показывается в теле
+модалки, генерацию можно повторять.
+
+### `POST /api/generate_deploy_instruction.php` — оформить инструкцию выливки для PR
+
+Запрос: `{ "instruction": "сырой текст инструкции" }` (422 при пустом значении)
+
+Логика (`DeployInstructionService::generate()`): системный промпт требует не менять смысл
+текста, копировать код/SQL/идентификаторы символ-в-символ (можно только обернуть в
+inline-код/блок), не добавлять ничего от себя и подставить результат в фиксированный шаблон
+`### ❗ **ВАЖНО** ❗` / `**Перед мерджем сделать следующее:**` / `<инструкция>` — см. таблицу
+пунктов чек-листа (`deploy_instruction`) для причины эмодзи вместо цвета.
+
+Ответ: `{ "instruction": "### ❗ **ВАЖНО** ❗\n**Перед мерджем сделать следующее:**\n..." }`
+
+Вызывается кнопкой «Сгенерировать» внутри модалки пункта `deploy_instruction` — результат
+копируется сразу и показывается в теле модалки с отдельной кнопкой повторного копирования,
+генерацию можно повторять.
+
+### `POST /api/generate_motivation_quote.php` — сгенерировать мотивационную цитату
+
+Запрос: `{}` (без параметров)
+
+Логика (`MotivationQuoteService::generate()`): системный промпт требует одну цитату на
+русском, не длиннее предложения (до 20 слов), воодушевляющую, но не приторную, без
+кавычек/автора/вступлений; ответ дополнительно очищается от кавычек всех видов. **Никакого
+кэширования** — цитата генерируется заново при каждом вызове (в отличие от курса валют у
+`calc_earnings.php`).
+
+Ответ: `{ "quote": "..." }`
+
+Вызывается только из `showCongratsModal()` (см. бизнес-правила — модалка поздравления при
+достижении дневной нормы часов) вместе с `calc_earnings.php`, параллельно и независимо. При
+ошибке фронт берёт случайную цитату из локального фолбэк-массива `MOTIVATION_QUOTES_FALLBACK`
+в `app.js`, чтобы модалка не зависела от доступности нейронки.
+
+### `POST /api/calc_earnings.php` — заработок в UAH за отработанное время
+
+Запрос: `{ "seconds": 28800 }` (отработанные сегодня секунды)
+
+Логика (`EarningsService::earningsUahForSeconds`): `earnings_uah = round(seconds/3600 *
+hourlyRateUsd * usdToUahRate(), 2)`, где `hourlyRateUsd` — `Config::salaryHourlyRateUsd()`
+(`[salary]` в `config/params.ini`), `usdToUahRate()` — курс с публичного API
+`open.er-api.com` через `ExchangeRateClient` (файловый кэш `storage/exchange_rate_cache.json`
+на 6 часов, при недоступности сервиса отдаётся устаревший кэш, если он есть). Не привязан к
+задаче (нет `task_id`) — идёт мимо `TaskService`. 422 при `seconds ⩽ 0`; 502 при ошибке курса
+валют.
+
+Ответ: `{ "earnings_uah": 1234.56 }`
+
+Вызывается только из `showCongratsModal()` с `seconds` = сумма затреканного за сегодня после
+трека; фронт форматирует через `formatUah()`. Строка заработка в модалке не показывается, если
+запрос не удался или вернул `0`.
 
 ## Frontend (`public/`)
 
@@ -475,6 +772,14 @@ JQL-поиск `worklogAuthor = currentUser() AND worklogDate >= startOfDay()` �
     `onRender`, у скрытого ползунка ширина нулевая и позиции посчитались бы неверно;
   - кнопка «Затрекать» заблокирована, пока добавлять нечего (`.btn:disabled`), после успеха —
     тост и `loadTodayTimeSpent()`.
+- Дропдаун git-команд (`gitActionsBtn`/`gitActionsPopover`) — открывается по клику у названия
+  ветки внизу экрана (виден только когда `tasks.git_branch` задан, см. `renderGitBranch()`),
+  список команд не хранится в БД и не связан с чек-листом — карта `code → команда`
+  (`GIT_ACTION_COMMANDS` в `app.js`): `create-branch` (`git checkout -b <ветка>`), `push`
+  (`git push origin <ветка>` — команда, которую раньше показывал пункт `code_written`, теперь
+  живёт только здесь), `rebase-api3`/`rebase-adminka` (`git rebase origin/main`/`origin/dev`,
+  названия проектов зашиты в код). Клик по пункту дропдауна копирует команду и показывает тост,
+  ничего не отмечает.
 - `localStorage`:
   - `devflow_theme` — выбранная тема (light/dark);
   - `devflow_task_link` — ссылка последней открытой задачи, чтобы не вводить её повторно после
@@ -489,9 +794,10 @@ JQL-поиск `worklogAuthor = currentUser() AND worklogDate >= startOfDay()` �
     `api/state.php` (без побочных эффектов) уже после отрисовки списка — сетевая задержка не
     блокирует открытие экрана, а ошибка запроса просто оставляет процент пустым.
 - `sessionStorage`:
-  - `devflow_pr_link_<task.id>` — ссылка на PR, введённая на шаге `pull_request`, чтобы шаг
-    `send_pr` мог её скопировать. Специально `sessionStorage`, а не БД — это данные текущей
-    рабочей сессии, не часть постоянной схемы (см. исходную структуру БД в задаче проекта).
+  - `devflow_pr_link_<task.id>` — ссылка на PR, введённая на шаге `pull_request`, читают её
+    пункты `claude_review` (промпт для ревью), `jira_description` (кнопка «Скопировать PR») и
+    `send_pr` (кнопка «Скопировать Link to PR»). Специально `sessionStorage`, а не БД — это
+    данные текущей рабочей сессии, не часть постоянной схемы.
 - Копирование в буфер — всегда через `copyText()`/`copyRichText()` и **всегда** сопровождается
   тостом через `notifyCopied()` с описанием, что скопировано (сверху экрана, см. `.toast` в
   CSS). Добавляя новое копирование — используй `notifyCopied()`, не изобретай свой текст-тост.

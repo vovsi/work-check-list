@@ -27,17 +27,36 @@ Stop: `docker compose down`
 ## Structure
 
 - `database/schema.sql` — SQLite schema (tasks, checklist, task_checklist)
-- `storage/app.sqlite` — DB file, created automatically on first run
-- `src/` — classes (Database, TaskRepository, ChecklistRepository, TaskService, LlmClient, CommitMessageService)
-- `api/` — JSON endpoints (task.php, toggle.php, finish.php, generate_commit_message.php)
+- `storage/` — created automatically: `app.sqlite` (DB file) and `exchange_rate_cache.json`
+  (USD→UAH rate cache, 6h TTL, used by the earnings calculation)
+- `src/` — classes: `Database` (connection + migrations + checklist seeding), `Config`
+  (reads/validates `config/params.ini`), `TaskRepository`, `ChecklistRepository`, `TaskService`
+  (find-or-create task + checklist orchestration), `JiraClient` (Jira REST API v2 client),
+  `JiraSyncService` (sync, status transitions, worklogs), `LlmClient` (transport client to a
+  local LLM server), `BranchNameService`, `CommitMessageService`, `DeployInstructionService`,
+  `MotivationQuoteService` (all four generate text via `LlmClient`), `EarningsService`
+  (UAH earnings for time worked), `ExchangeRateClient` (USD→UAH rate with file cache)
+- `api/` — JSON endpoints: `task.php`, `state.php`, `toggle.php`, `finish.php`,
+  `delete_task.php`, `today_time_spent.php`, `get_time_spent.php`, `log_time_quick.php`,
+  `log_time.php`, `update_story_points.php`, `transition_doing.php`,
+  `transition_pull_request.php`, `generate_branch_name.php`, `generate_commit_message.php`,
+  `generate_deploy_instruction.php`, `generate_motivation_quote.php`, `calc_earnings.php`
 - `public/` — frontend (index.php, assets/css, assets/js)
 - `Dockerfile`, `docker-compose.yml` — containerized run (PHP 8.3 + pdo_sqlite)
-- `config/params.ini` — local LLM config, not in git (see below)
+- `config/params.ini` — integrations config (Jira, LLM, GitHub, work day, salary), not in git
+  (see below)
 
-## LLM config (Commit Message generation)
+See `CLAUDE.md` in this repo for the full architecture, business rules and per-endpoint
+description.
 
-The "Закоммитить код" checklist item can generate a commit message via a local LLM server
-(e.g. LM Studio) exposing `POST <host>/api/v1/chat` with `{model, system_prompt, input}`.
+## LLM config (branch name / commit message / deploy instruction / motivation quote)
+
+Four checklist/modal features generate text via a local LLM server (e.g. LM Studio) exposing
+`POST <host>/api/v1/chat` with `{model, system_prompt, input}`: the "Создать ветку в Git" item
+(branch name suggestion), the "Закоммитить код" item (commit message), the
+"Указать инструкцию выливки" item (deploy instruction formatting for the PR description), and
+the "reached daily hours" congrats modal (motivation quote). All four share the same `[llm]`
+config and go through one `LlmClient`.
 
 Copy the example config and point it at your LLM server:
 
@@ -55,11 +74,15 @@ model = "deepseek-coder-v2-lite-instruct"
 in Docker, `localhost` inside the container points at the container itself — use
 `host.docker.internal` (or your host machine's LAN IP) to reach an LLM server running on the
 host. If you run the app without Docker (`php -S localhost:8000`), plain `localhost` works.
+Without this section the four LLM endpoints respond with an error — the rest of the app still
+works.
 
-## Jira config (auto-fetch task title/description)
+## Jira config (auto-fetch task title/description, status transitions, Story Points, time tracking)
 
 Opening a task fetches its title/description from Jira once and stores them in the DB — the
-sync icon (top-left, next to the checklist) re-fetches on demand.
+sync icon (top-left, next to the checklist) re-fetches on demand. The same integration also
+powers the "Указать Story Points", "Перевести в статус Doing", "Перевести задачу в Pull
+Request" and "Затрекать время" checklist items.
 
 Add credentials to `config/params.ini`:
 
@@ -68,10 +91,15 @@ Add credentials to `config/params.ini`:
 base_url = "https://your-domain.atlassian.net"
 email = "you@example.com"
 api_token = "your-api-token"
+story_points_field = "customfield_10016"
+doing_status = "Doing"
+pull_request_status = "Pull request"
 ```
 
-Generate an API token at https://id.atlassian.com/manage-profile/security/api-tokens. Without
-this section the app still works — tasks just open without a synced title/description.
+Generate an API token at https://id.atlassian.com/manage-profile/security/api-tokens.
+`story_points_field`/`doing_status`/`pull_request_status` are optional — shown above are their
+defaults. Without this section the app still works — tasks just open without a synced
+title/description, and the Jira-backed checklist items are skipped.
 
 ## GitHub CLI (PR creation)
 
@@ -101,4 +129,22 @@ lunch_end = "13:00"
 
 Optional — defaults are 09:00, 18:00, 8 hours and a 12:00–13:00 lunch break. The lunch break is
 highlighted in orange on the slider and never counted into the logged time; a break outside the
-work day bounds is simply ignored.
+work day bounds is simply ignored. `daily_hours` is also the threshold for the congrats modal
+below.
+
+## Salary config (earnings shown on the congrats modal)
+
+The first time-log of the day that brings today's total up to `[worktime].daily_hours` pops up
+a congrats modal with a motivation quote (see LLM config above) and, in parallel, today's
+earnings in UAH — computed from an hourly USD rate converted at the current USD→UAH exchange
+rate (cached for 6 hours, see `storage/exchange_rate_cache.json` above).
+
+```ini
+[salary]
+monthly_usd = 1500
+working_days_per_month = 21
+```
+
+Optional — defaults shown above. Hourly rate = `monthly_usd / (working_days_per_month *
+daily_hours)`. The earnings line is simply omitted from the modal if the exchange rate request
+fails or the computed amount is `0`.
