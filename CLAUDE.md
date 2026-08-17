@@ -68,7 +68,8 @@ src/
   BranchNameService.php    — генерация имени git-ветки через LlmClient (Service)
   CommitMessageService.php — генерация commit message через LlmClient (Service)
   DeployInstructionService.php — форматирование инструкции выливки для PR через LlmClient (Service)
-  MotivationQuoteService.php — мотивационная цитата через LlmClient (Service)
+  MotivationQuoteService.php — цитата из QuoteClient + перевод на русский через LlmClient (Service)
+  QuoteClient.php          — случайная цитата с zenquotes.io, без кэша (Client)
   EarningsService.php      — расчёт заработка в UAH за отработанное время (Service)
   ExchangeRateClient.php   — курс USD→UAH с open.er-api.com, файловый кэш на 6 часов (Client)
 api/
@@ -89,7 +90,7 @@ api/
   generate_branch_name.php   — POST: сгенерировать имя git-ветки (LLM)
   generate_commit_message.php — POST: сгенерировать commit message (LLM)
   generate_deploy_instruction.php — POST: оформить инструкцию выливки для PR (LLM)
-  generate_motivation_quote.php — POST: сгенерировать мотивационную цитату (LLM)
+  generate_motivation_quote.php — POST: случайная цитата из открытого API + перевод (LLM)
   calc_earnings.php          — POST: посчитать заработок в UAH за отработанные секунды
 public/
   index.php                 — единственная HTML-страница приложения
@@ -132,15 +133,20 @@ Dockerfile, docker-compose.yml — контейнерный запуск, вес
 - **Client (транспорт без бизнес-логики)** — `JiraClient` (Jira REST API v2, Basic Auth
   email+token), `LlmClient` (локальная нейронка, `POST <host>/api/v1/chat`), `ExchangeRateClient`
   (курс USD→UAH с `open.er-api.com`, файловый кэш `storage/exchange_rate_cache.json` на 6 часов,
-  при недоступности сервиса — cache-aside: отдаётся последний закэшированный курс). Каждый
-  Client не знает, из-за какого сценария использования его вызвали.
+  при недоступности сервиса — cache-aside: отдаётся последний закэшированный курс),
+  `QuoteClient` (случайная цитата с `zenquotes.io`, бесплатный публичный API без ключа,
+  **без кэша намеренно** — цитата должна быть новой при каждом показе; слишком длинная для окна
+  500×500 цитата перезапрашивается до `MAX_ATTEMPTS` раз). Каждый Client не знает, из-за какого
+  сценария использования его вызвали.
 - **Один Client + N Service с разными промптами (LLM-интеграция, DRY)** — `LlmClient` ничего не
   знает о конкретных промптах, только шлёт `{model, system_prompt, input}` и гибко разбирает
   разные форматы ответа LLM-серверов. Поверх него — четыре тонких Service, у каждого свой
   фиксированный системный промпт под одну задачу: `BranchNameService` (имя git-ветки, пункт
   `git_branch`), `CommitMessageService` (commit message, пункт `code_written`),
   `DeployInstructionService` (инструкция выливки для PR, пункт `deploy_instruction`),
-  `MotivationQuoteService` (мотивационная цитата для модалки поздравления, см. бизнес-правила).
+  `MotivationQuoteService` (перевод цитаты для модалки поздравления, см. бизнес-правила — тут
+  нейронка не автор текста, а только переводчик поверх `QuoteClient`, и `LlmClient` для него
+  опционален: без настроенной `[llm]` сервис отдаёт оригинал на английском).
   Конфиг для всех четырёх один — `Config::llm()` (`[llm]` → `host`/`model` в
   `config/params.ini`). Добавляя новую LLM-фичу — не пиши новый HTTP-клиент, добавь ещё один
   Service поверх `LlmClient`.
@@ -205,7 +211,8 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
   `daily_hours` также используется как порог показа модалки поздравления (см. бизнес-правила).
 - **`[llm]`** — `host`/`model` локальной нейронки (без ключа, протокол `POST <host>/api/v1/chat`,
   см. «Один Client + N Service» в Паттернах). Без этой секции `Config::llm()` бросает
-  исключение — все четыре LLM-эндпоинта отвечают 502.
+  исключение — три из четырёх LLM-эндпоинтов отвечают 502; `generate_motivation_quote.php`
+  переживает это (нейронка там только переводчик) и отдаёт цитату на языке оригинала.
 - **`[github]`** — `reviewers` (список ников через запятую) для флага `--reviewer` в команде
   `gh pr create` на шаге `pull_request` (`Config::githubReviewers()`, прокидывается на фронт
   через `window.DEVFLOW_CONFIG.githubReviewers` в `public/index.php`). Не задано — флаг просто
@@ -278,8 +285,10 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
   подгружает: заработок за отработанные сегодня секунды (`api/calc_earnings.php` →
   `EarningsService`, строка «Ты заработал сегодня +N грн 💸» не показывается, если запрос не
   удался или сумма ⩽ 0) и мотивационную цитату (`api/generate_motivation_quote.php` →
-  `MotivationQuoteService`, при ошибке — случайная из локального фолбэк-массива
-  `MOTIVATION_QUOTES_FALLBACK`, 5 фраз в `app.js`, чтобы модалка не зависела от нейронки).
+  `MotivationQuoteService` — реальная случайная цитата из открытого API, переведённая на
+  русский; показывается вместе с именем автора, при ошибке — случайная из локального
+  фолбэк-массива `MOTIVATION_QUOTES_FALLBACK`, 5 фраз в `app.js`, уже без автора, чтобы модалка
+  не зависела от внешней сети).
   Ошибка одного из двух запросов не блокирует показ модалки и не прячет результат второго.
   Единственная кнопка — «Спасибо!». Индикация загрузки — третий способ из раздела ниже
   (`showGlobalLoader()`/`hideGlobalLoader()` вокруг `Promise.all`): к моменту вызова кнопка
@@ -621,7 +630,9 @@ Story Points в самой задаче Jira (`JiraSyncService::updateStoryPoint
 `generate_motivation_quote.php` устроены одинаково: читают `Config::llm()` (`[llm].host`/`model`)
 и зовут `LlmClient::chat()` через свой Service (см. «Один Client + N Service» в разделе
 «Паттерны») — 502, если LLM не настроен или ответил ошибкой. Ни один из четырёх не пишет
-ничего в БД напрямую.
+ничего в БД напрямую. Исключение — `generate_motivation_quote.php`: там нейронка только
+переводит уже полученную из внешнего API цитату, поэтому её недоступность не является ошибкой
+эндпоинта (см. ниже).
 
 ### `POST /api/generate_branch_name.php` — сгенерировать имя git-ветки
 
@@ -676,22 +687,27 @@ inline-код/блок), не добавлять ничего от себя и �
 копируется сразу и показывается в теле модалки с отдельной кнопкой повторного копирования,
 генерацию можно повторять.
 
-### `POST /api/generate_motivation_quote.php` — сгенерировать мотивационную цитату
+### `POST /api/generate_motivation_quote.php` — случайная мотивационная цитата
 
 Запрос: `{}` (без параметров)
 
-Логика (`MotivationQuoteService::generate()`): системный промпт требует одну цитату на
-русском, не длиннее предложения (до 20 слов), воодушевляющую, но не приторную, без
-кавычек/автора/вступлений; ответ дополнительно очищается от кавычек всех видов. **Никакого
-кэширования** — цитата генерируется заново при каждом вызове (в отличие от курса валют у
-`calc_earnings.php`).
+Логика (`MotivationQuoteService::generate()`): цитата **не придумывается нейронкой**, а тянется
+реальной из открытого API (`QuoteClient` → `zenquotes.io/api/random`, англоязычный — живых
+бесплатных русскоязычных API без ключа нет), затем переводится на русский через `LlmClient`
+(системный промпт: сохранить смысл и краткость, вернуть только перевод; результат чистится от
+кавычек). Перевод — best-effort: если `[llm]` не настроена или нейронка упала, отдаётся оригинал
+на английском, эндпоинт при этом не считается упавшим. 502 — только если недоступен сам сервис
+цитат. **Никакого кэширования** — цитата запрашивается заново при каждом вызове (в отличие от
+курса валют у `calc_earnings.php`).
 
-Ответ: `{ "quote": "..." }`
+Ответ: `{ "quote": "...", "author": "Robert Greene" }` (`author` может быть пустой строкой)
 
 Вызывается только из `showCongratsModal()` (см. бизнес-правила — модалка поздравления при
-достижении дневной нормы часов) вместе с `calc_earnings.php`, параллельно и независимо. При
-ошибке фронт берёт случайную цитату из локального фолбэк-массива `MOTIVATION_QUOTES_FALLBACK`
-в `app.js`, чтобы модалка не зависела от доступности нейронки.
+достижении дневной нормы часов) вместе с `calc_earnings.php`, параллельно и независимо. Автор
+показывается отдельной строкой под цитатой (`.congrats-quote-author`) — только для цитаты из
+API. При ошибке фронт берёт случайную цитату из локального фолбэк-массива
+`MOTIVATION_QUOTES_FALLBACK` в `app.js` (уже без автора), чтобы модалка не зависела от внешней
+сети.
 
 ### `POST /api/calc_earnings.php` — заработок в UAH за отработанное время
 

@@ -4,24 +4,50 @@ declare(strict_types=1);
 
 namespace App;
 
-/** Генерирует короткую мотивационную цитату для модалки поздравления (LlmClient — та же нейронка, что и для commit message/deploy instruction) */
+use Throwable;
+
+/**
+ * Мотивационная цитата для модалки поздравления: реальная цитата из открытого API (QuoteClient),
+ * переведённая на русский локальной нейронкой. Нейронка тут не автор, а только переводчик —
+ * если она не настроена или упала, отдаём оригинал на английском, лишь бы цитата была.
+ */
 final class MotivationQuoteService
 {
-    private const SYSTEM_PROMPT = <<<'PROMPT'
-Ты придумываешь короткие мотивационные цитаты на русском языке для разработчика, который
-только что отработал полную рабочую норму часов за день. Придумай ОДНУ цитату — не длиннее
-одного предложения, максимум 20 слов, в воодушевляющем, но не приторном тоне, как будто её
-мог сказать реальный человек, а не мотивационный плакат. Верни только сам текст цитаты, без
-кавычек, без указания автора, без вступительных фраз и пояснений.
+    private const TRANSLATE_PROMPT = <<<'PROMPT'
+Ты переводишь короткие мотивационные цитаты на русский язык. Переведи цитату, которую тебе
+дали: сохрани смысл и краткость, звучи естественно по-русски, а не буквально. Верни только сам
+перевод — без кавычек, без имени автора, без вступлений, пояснений и вариантов на выбор.
 PROMPT;
 
     public function __construct(
-        private readonly LlmClient $llmClient,
+        private readonly QuoteClient $quoteClient,
+        private readonly ?LlmClient $llmClient,
     ) {
     }
 
-    public function generate(): string
+    /** @return array{quote: string, author: string} */
+    public function generate(): array
     {
-        return trim($this->llmClient->chat(self::SYSTEM_PROMPT, 'Придумай цитату.'), " \t\n\r\0\x0B\"«»");
+        $quote = $this->quoteClient->randomQuote();
+
+        return [
+            'quote' => $this->translate($quote['text']),
+            'author' => $quote['author'],
+        ];
+    }
+
+    private function translate(string $text): string
+    {
+        if ($this->llmClient === null) {
+            return $text;
+        }
+
+        try {
+            $translated = trim($this->llmClient->chat(self::TRANSLATE_PROMPT, $text), " \t\n\r\0\x0B\"«»");
+        } catch (Throwable $e) {
+            return $text;
+        }
+
+        return $translated !== '' ? $translated : $text;
     }
 }

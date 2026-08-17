@@ -1983,8 +1983,8 @@
         );
     }
 
-    /** Цитаты-заглушка, если нейронка недоступна (api/generate_motivation_quote.php упал) —
-     * модалка поздравления не должна зависеть от сети до нейронки */
+    /** Цитаты-заглушка, если api/generate_motivation_quote.php упал (недоступен сервис цитат) —
+     * модалка поздравления не должна зависеть от внешней сети */
     const MOTIVATION_QUOTES_FALLBACK = [
         'Сегодняшняя дисциплина — завтрашняя свобода.',
         'Маленькие дела, сделанные каждый день, складываются в большие результаты.',
@@ -2017,6 +2017,9 @@
             : '';
         const quoteText = (quote && quote.quote) ||
             MOTIVATION_QUOTES_FALLBACK[Math.floor(Math.random() * MOTIVATION_QUOTES_FALLBACK.length)];
+        const quoteAuthorHtml = quote && quote.quote && quote.author
+            ? `<span class="congrats-quote-author">— ${escapeHtml(quote.author)}</span>`
+            : '';
 
         await showModal(
             '🎉 Отличная работа! 🎉',
@@ -2024,7 +2027,7 @@
                 '<div class="congrats-emoji">🎊🥳🎊</div>' +
                 '<p class="congrats-text">Ты сегодня хорошо поработал!</p>' +
                 earningsHtml +
-                `<p class="congrats-quote">«${escapeHtml(quoteText)}»</p>` +
+                `<p class="congrats-quote">«${escapeHtml(quoteText)}»${quoteAuthorHtml}</p>` +
                 '</div>',
             [{ label: 'Спасибо!', primary: true, value: true }]
         );

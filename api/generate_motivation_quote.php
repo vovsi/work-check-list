@@ -7,19 +7,28 @@ require_once __DIR__ . '/_bootstrap.php';
 use App\Config;
 use App\LlmClient;
 use App\MotivationQuoteService;
+use App\QuoteClient;
 
-// Генерирует мотивационную цитату для модалки поздравления (см. calc_earnings.php — тот же повод).
+// Отдаёт мотивационную цитату для модалки поздравления (см. calc_earnings.php — тот же повод).
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(['error' => 'Метод не поддерживается'], 405);
 }
 
+// Нейронка тут только переводчик — без неё цитата всё равно отдаётся, на языке оригинала
+$llmClient = null;
 try {
     $llmConfig = Config::llm();
-    $service = new MotivationQuoteService(new LlmClient($llmConfig['host'], $llmConfig['model']));
-    $quote = $service->generate();
+    $llmClient = new LlmClient($llmConfig['host'], $llmConfig['model']);
+} catch (\Throwable $e) {
+    $llmClient = null;
+}
+
+try {
+    $service = new MotivationQuoteService(new QuoteClient(), $llmClient);
+    $result = $service->generate();
 } catch (\Throwable $e) {
     respond(['error' => $e->getMessage()], 502);
 }
 
-respond(['quote' => $quote]);
+respond($result);
