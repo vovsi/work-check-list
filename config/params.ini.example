@@ -10,7 +10,22 @@ model = "deepseek-coder-v2-lite-instruct"
 
 [github]
 ; Ники ревьюверов для команды `gh pr create --reviewer`, через запятую при нескольких.
-reviewers = "vovsi"
+reviewers = "your-github-nickname"
+
+; Пункты «Rebase …» в дропдауне git-команд у названия ветки: «Подпись:базовая-ветка»,
+; через запятую при нескольких. Подпись — как показать в меню, базовая ветка подставляется
+; в команду `git rebase origin/<база>`. Необязательно — не задано, пунктов rebase нет.
+[git]
+rebase_targets = "API3:main, Adminka:dev"
+
+; Специфичные для команды куски текстов, которые не должны быть зашиты в код.
+; review_skip_migration_repos — репозитории, где миграции не выполняются: перечисляются в
+;   промпте Claude-ревью как исключение («не проверяй миграции»). Не задано — блока в промпте нет.
+; deploy_config_project — название проекта в шаблоне выливки («Добавить в конфиг <…>»).
+;   Не задано — строка остаётся без названия проекта.
+[templates]
+review_skip_migration_repos = "api_v3, adminka"
+deploy_config_project = "апи3"
 
 [atlassian]
 ; Данные для подтягивания заголовка/описания задачи из Jira при открытии (см. README).
@@ -48,8 +63,24 @@ lunch_end = "13:00"
 
 ; Заработок за день в модалке поздравления (появляется, когда трек времени за день достигает
 ; [worktime].daily_hours) — оклад в USD/месяц делится на условное число рабочих часов в месяце
-; (working_days_per_month × daily_hours), курс USD → UAH берётся с open.er-api.com.
+; (working_days_per_month × daily_hours), затем пересчитывается в валюту из [currency].
 ; Необязательно — по умолчанию 1500 и 21 (см. Config::SALARY_DEFAULTS).
 [salary]
 monthly_usd = 1500
 working_days_per_month = 21
+
+; Валюта, в которой показывается заработок в модалке поздравления.
+; code — код валюты для курса USD → X (должен быть в ответе сервиса курсов, [services].exchange_rate_url)
+; label — подпись рядом с суммой в интерфейсе.
+; Необязательно — по умолчанию UAH и «грн» (см. Config::CURRENCY_DEFAULTS).
+[currency]
+code = "UAH"
+label = "грн"
+
+; Адреса внешних сервисов без ключей/токенов (те, что с токенами, — в своих секциях выше:
+; [atlassian] и [llm]). Необязательно — по умолчанию значения ниже (см. Config::SERVICE_URL_DEFAULTS).
+; exchange_rate_url — курс валют для расчёта заработка, база USD, ответ вида {"rates": {"UAH": 41.2}}
+; quotes_url — случайная цитата для модалки поздравления, ответ вида [{"q": "...", "a": "author"}]
+[services]
+exchange_rate_url = "https://open.er-api.com/v6/latest/USD"
+quotes_url = "https://zenquotes.io/api/random"

@@ -24,6 +24,18 @@ final class Config
         'working_days_per_month' => 21.0,
     ];
 
+    /** Значения [currency] по умолчанию (см. currency()) */
+    public const CURRENCY_DEFAULTS = [
+        'code' => 'UAH',
+        'label' => 'грн',
+    ];
+
+    /** Адреса внешних сервисов по умолчанию (см. [services] в config/params.ini.example) */
+    public const SERVICE_URL_DEFAULTS = [
+        'exchange_rate_url' => 'https://open.er-api.com/v6/latest/USD',
+        'quotes_url' => 'https://zenquotes.io/api/random',
+    ];
+
     private static ?array $data = null;
 
     public static function llm(): array
@@ -152,6 +164,50 @@ final class Config
         return $monthlyUsd / ($workingDays * self::workTime()['daily_hours']);
     }
 
+    /**
+     * Валюта, в которую пересчитывается заработок в модалке поздравления: code — код для
+     * курса USD → X у ExchangeRateClient, label — подпись для фронта («грн»). Пустые
+     * значения молча заменяются на CURRENCY_DEFAULTS, как и у workTime()/salaryHourlyRateUsd().
+     *
+     * @return array{code: string, label: string}
+     */
+    public static function currency(): array
+    {
+        $section = self::load()['currency'] ?? [];
+
+        return [
+            'code' => strtoupper(self::stringOrDefault($section, 'code', self::CURRENCY_DEFAULTS['code'])),
+            'label' => self::stringOrDefault($section, 'label', self::CURRENCY_DEFAULTS['label']),
+        ];
+    }
+
+    /** Адрес API курсов валют (ExchangeRateClient). Не задан в конфиге — SERVICE_URL_DEFAULTS */
+    public static function exchangeRateUrl(): string
+    {
+        return self::stringOrDefault(
+            self::load()['services'] ?? [],
+            'exchange_rate_url',
+            self::SERVICE_URL_DEFAULTS['exchange_rate_url']
+        );
+    }
+
+    /** Адрес API цитат (QuoteClient). Не задан в конфиге — SERVICE_URL_DEFAULTS */
+    public static function quotesUrl(): string
+    {
+        return self::stringOrDefault(
+            self::load()['services'] ?? [],
+            'quotes_url',
+            self::SERVICE_URL_DEFAULTS['quotes_url']
+        );
+    }
+
+    private static function stringOrDefault(array $section, string $key, string $fallback): string
+    {
+        $value = trim((string) ($section[$key] ?? ''));
+
+        return $value !== '' ? $value : $fallback;
+    }
+
     private static function normalizeClock(string $value, string $fallback): string
     {
         return preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', trim($value)) === 1 ? trim($value) : $fallback;
@@ -160,14 +216,63 @@ final class Config
     /** Ники ревьюверов для команды `gh pr create --reviewer`. Не задано в конфиге — пустой список (флаг просто не добавляется в команду) */
     public static function githubReviewers(): array
     {
-        $data = self::load();
-        $reviewers = trim((string) ($data['github']['reviewers'] ?? ''));
+        return self::commaList(self::load()['github'] ?? [], 'reviewers');
+    }
 
-        if ($reviewers === '') {
+    /**
+     * Пункты «Rebase …» в дропдауне git-команд: названия репозиториев команды и их базовых
+     * веток («API3:main, Adminka:dev»). Специфично для конкретной команды, поэтому в код не
+     * зашивается — не задано в конфиге, пунктов rebase в дропдауне просто нет.
+     *
+     * @return list<array{label: string, base: string}>
+     */
+    public static function gitRebaseTargets(): array
+    {
+        $targets = [];
+        foreach (self::commaList(self::load()['git'] ?? [], 'rebase_targets') as $target) {
+            [$label, $base] = array_pad(explode(':', $target, 2), 2, '');
+            $label = trim($label);
+            $base = trim($base);
+            if ($label !== '' && $base !== '') {
+                $targets[] = ['label' => $label, 'base' => $base];
+            }
+        }
+
+        return $targets;
+    }
+
+    /**
+     * Репозитории, в которых миграции не выполняются — упоминаются в промпте Claude-ревью
+     * как исключение. Не задано в конфиге — блок исключения в промпт не попадает.
+     *
+     * @return list<string>
+     */
+    public static function reviewSkipMigrationRepos(): array
+    {
+        return self::commaList(self::load()['templates'] ?? [], 'review_skip_migration_repos');
+    }
+
+    /** Название проекта в шаблоне выливки («Добавить в конфиг <…>»). Не задано — строка без названия */
+    public static function deployConfigProject(): string
+    {
+        return self::stringOrDefault(self::load()['templates'] ?? [], 'deploy_config_project', '');
+    }
+
+    /**
+     * Значение вида «a, b, c» → список непустых элементов (общий формат для всех
+     * перечислений в params.ini: ревьюверы, rebase-цели, репозитории-исключения)
+     *
+     * @return list<string>
+     */
+    private static function commaList(array $section, string $key): array
+    {
+        $raw = trim((string) ($section[$key] ?? ''));
+
+        if ($raw === '') {
             return [];
         }
 
-        return array_values(array_filter(array_map('trim', explode(',', $reviewers))));
+        return array_values(array_filter(array_map('trim', explode(',', $raw))));
     }
 
     private static function load(): array

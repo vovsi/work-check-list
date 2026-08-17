@@ -16,9 +16,15 @@ header('Expires: 0');
 try {
     $githubReviewers = Config::githubReviewers();
     $workTime = Config::workTime();
+    $gitRebaseTargets = Config::gitRebaseTargets();
+    $reviewSkipMigrationRepos = Config::reviewSkipMigrationRepos();
+    $deployConfigProject = Config::deployConfigProject();
 } catch (\Throwable $e) {
     $githubReviewers = [];
     $workTime = Config::WORK_TIME_DEFAULTS;
+    $gitRebaseTargets = [];
+    $reviewSkipMigrationRepos = [];
+    $deployConfigProject = '';
 }
 
 // Версия статики = время последнего изменения файла: при каждой правке CSS/JS
@@ -142,8 +148,9 @@ $assetVersion = static function (string $relativePath): string {
                 <div id="git-actions-popover" class="popover popover--git hidden">
                     <button class="git-action-option" data-action="create-branch">Create Branch</button>
                     <button class="git-action-option" data-action="push">Push</button>
-                    <button class="git-action-option" data-action="rebase-api3">Rebase API3</button>
-                    <button class="git-action-option" data-action="rebase-adminka">Rebase Adminka</button>
+                    <?php foreach ($gitRebaseTargets as $target): ?>
+                        <button class="git-action-option" data-action="rebase" data-base="<?= htmlspecialchars($target['base'], ENT_QUOTES) ?>">Rebase <?= htmlspecialchars($target['label'], ENT_QUOTES) ?></button>
+                    <?php endforeach; ?>
                 </div>
             </div>
         </div>
@@ -177,7 +184,9 @@ $assetVersion = static function (string $relativePath): string {
 <script>
     window.DEVFLOW_CONFIG = {
         githubReviewers: <?= json_encode($githubReviewers, JSON_UNESCAPED_UNICODE) ?>,
-        workTime: <?= json_encode($workTime, JSON_UNESCAPED_UNICODE) ?>
+        workTime: <?= json_encode($workTime, JSON_UNESCAPED_UNICODE) ?>,
+        reviewSkipMigrationRepos: <?= json_encode($reviewSkipMigrationRepos, JSON_UNESCAPED_UNICODE) ?>,
+        deployConfigProject: <?= json_encode($deployConfigProject, JSON_UNESCAPED_UNICODE) ?>
     };
 </script>
 <script src="assets/js/app.js?v=<?= $assetVersion('assets/js/app.js') ?>"></script>

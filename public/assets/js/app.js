@@ -4,10 +4,21 @@
 
     // ==================== Тексты для копирования (пункты 6 и 7) ====================
 
+    /** Название проекта в строке «Добавить в конфиг …» шаблона выливки — из config/params.ini
+     * ([templates].deploy_config_project), в код не зашивается: у каждой команды оно своё */
+    const DEPLOY_CONFIG_PROJECT = (window.DEVFLOW_CONFIG && window.DEVFLOW_CONFIG.deployConfigProject) || '';
+
+    /** Репозитории без миграций — исключение в промпте Claude-ревью, тоже из конфига
+     * ([templates].review_skip_migration_repos). Список пуст — блок исключения не добавляется */
+    const REVIEW_SKIP_MIGRATION_REPOS =
+        (window.DEVFLOW_CONFIG && window.DEVFLOW_CONFIG.reviewSkipMigrationRepos) || [];
+
     function buildDeployDetailsText(taskId, prLink) {
+        const configTarget = DEPLOY_CONFIG_PROJECT ? ` ${DEPLOY_CONFIG_PROJECT}` : '';
+
         return `Для выливки ${taskId} необходимо:\n` +
             '1. Запустить скрипты БД:\n```\n\n```\n' +
-            '2. Добавить в конфиг апи3:\n```\n\n```\n' +
+            `2. Добавить в конфиг${configTarget}:\n\`\`\`\n\n\`\`\`\n` +
             '3. Вылить: ' + (prLink || '[ссылка на PR не найдена — вставьте вручную]');
     }
 
@@ -18,6 +29,21 @@
         '<b> Pull Requests</b><br/>1. <br/>';
 
     const JIRA_DESCRIPTION_PLAIN = 'Results\n1. \n\nTesting\n1. \n\nDatabase\n1. \n\nPull Requests\n1. ';
+
+    /** Блок «Важное исключение» промпта ревью — только если в конфиге перечислены репозитории
+     * без миграций (REVIEW_SKIP_MIGRATION_REPOS); пустой список — блока в промпте нет */
+    function buildReviewMigrationsExceptionBlock() {
+        if (REVIEW_SKIP_MIGRATION_REPOS.length === 0) {
+            return '';
+        }
+
+        const repos = REVIEW_SKIP_MIGRATION_REPOS.map((repo) => `\`${repo}\``).join(', ');
+
+        return '### Важное исключение:\n\n' +
+            `Для репозиториев ${repos} миграции для MySQL не выполняются — не проверяй ` +
+            'корректность и не оценивай качество написанных миграций в этих репозиториях.\n\n' +
+            '---\n\n';
+    }
 
     function buildClaudeReviewText(prLink) {
         return 'Ты — Senior Fullstack Code Reviewer с глубокой экспертизой в PHP, MySQL, JavaScript, HTML и CSS. \n\n' +
@@ -154,10 +180,7 @@
         '   - Прочитай комментарии к PR и учти замечания, оставленные ревьюверами.\n' +
         '   - Проверь, исправлены ли эти замечания в текущем коде/diff, и укажи, какие остались неисправленными.\n\n' +
         '---\n\n' +
-        '### Важное исключение:\n\n' +
-        'Для репозиториев `api_v3` и `adminka` миграции для MySQL не выполняются — не проверяй ' +
-        'корректность и не оценивай качество написанных миграций в этих репозиториях.\n\n' +
-        '---\n\n' +
+        buildReviewMigrationsExceptionBlock() +
         '### Формат ответа:\n\n' +
         '1. **Краткое резюме:** Общее впечатление от PR (1–3 предложения).\n' +
         '2. **Critical / Blocker (Критические проблемы):** Ошибки безопасности, баги, приводящие к падению, утечки памяти, SQL-инъекции. Требуют обязательно исправления.\n' +
@@ -417,9 +440,12 @@
         return `${Math.floor(minutes / 60)} ч назад`;
     }
 
-    /** Заработок в гривнах для модалки поздравления — округляем до целого, с разделителем тысяч */
-    function formatUah(value) {
-        return `${Math.round(value).toLocaleString('ru-RU')} грн`;
+    /**
+     * Заработок для модалки поздравления — округляем до целого, с разделителем тысяч.
+     * Подпись валюты приходит с сервера ([currency].label в config/params.ini), на фронте не зашита.
+     */
+    function formatMoney(value, currencyLabel) {
+        return `${Math.round(value).toLocaleString('ru-RU')} ${currencyLabel}`;
     }
 
     // ==================== Подсказки (data-tooltip) ====================
@@ -683,11 +709,12 @@
     // ==================== Дропдаун git-команд у названия ветки ====================
 
     /** Команды git по каждому пункту дропдауна (branch — текущая ветка задачи) */
+    // Пункты rebase рисуются из config/params.ini ([git].rebase_targets, см. public/index.php) —
+    // базовая ветка приходит в data-base кнопки, поэтому команда одна на все репозитории
     const GIT_ACTION_COMMANDS = {
         'create-branch': (branch) => `git checkout -b ${branch}`,
         push: (branch) => `git push origin ${branch}`,
-        'rebase-api3': () => 'git rebase origin/main',
-        'rebase-adminka': () => 'git rebase origin/dev',
+        rebase: (branch, base) => `git rebase origin/${base}`,
     };
 
     gitActionsBtn.addEventListener('click', (e) => {
@@ -701,7 +728,7 @@
     gitActionsPopover.addEventListener('click', (e) => e.stopPropagation());
     gitActionsPopover.querySelectorAll('.git-action-option').forEach((btn) => {
         btn.addEventListener('click', async () => {
-            const command = GIT_ACTION_COMMANDS[btn.dataset.action](state.task.git_branch);
+            const command = GIT_ACTION_COMMANDS[btn.dataset.action](state.task.git_branch, btn.dataset.base);
             await copyText(command);
             notifyCopied(command);
             gitActionsPopover.classList.add('hidden');
@@ -1993,32 +2020,67 @@
         'Хорошо сделанная работа сама себе награда — а премия просто приятный бонус.',
     ];
 
+    /** Разметка списка сегодняшних задач с затреканным временем — общая для модалки
+     * иконки-задач и модалки поздравления (в поздравлении статус не выводим: там важен сам
+     * список задач, а места в окне 500×500 меньше) */
+    function todayTasksListHtml(tasks, options) {
+        const withStatus = !(options && options.withStatus === false);
+        return '<div class="today-tasks-list">' +
+            tasks
+                .map(
+                    (task) =>
+                        '<a class="today-task-item" href="' +
+                        escapeHtml(task.link) +
+                        '" target="_blank" rel="noopener">' +
+                        `<span class="today-task-id">${escapeHtml(task.task_id)}</span>` +
+                        `<span class="today-task-title">${escapeHtml(task.title)}</span>` +
+                        (withStatus ? `<span class="today-task-status">${escapeHtml(task.status || '')}</span>` : '') +
+                        `<span class="today-task-time">${escapeHtml(formatDuration(task.seconds))}</span>` +
+                        '</a>'
+                )
+                .join('') +
+            '</div>';
+    }
+
     /**
      * Модалка поздравления — показывается, когда трек времени за день впервые за сегодня
-     * достигает нормы [worktime].daily_hours (см. вызов в openQuickTrackModal). Заработок и
-     * цитата подгружаются параллельно и независимо друг от друга: ошибка одного запроса не
-     * должна прятать другой и не должна блокировать саму модалку (цитата на этот случай
-     * заменяется локальной заглушкой, а строка заработка просто не показывается).
+     * достигает нормы [worktime].daily_hours (см. вызов в openQuickTrackModal). Заработок,
+     * цитата и список сегодняшних задач подгружаются параллельно и независимо друг от друга:
+     * ошибка одного запроса не должна прятать другие и не должна блокировать саму модалку
+     * (цитата на этот случай заменяется локальной заглушкой, а строки заработка и списка
+     * задач просто не показываются).
      */
     async function showCongratsModal(totalSecondsToday) {
         showGlobalLoader();
-        let earnings, quote;
+        let earnings, quote, breakdown;
         try {
-            [earnings, quote] = await Promise.all([
+            [earnings, quote, breakdown] = await Promise.all([
                 apiCall('../api/calc_earnings.php', { seconds: totalSecondsToday }).catch(() => null),
                 apiCall('../api/generate_motivation_quote.php', {}).catch(() => null),
+                apiCall('../api/today_time_spent_breakdown.php', {}).catch(() => null),
             ]);
         } finally {
             hideGlobalLoader();
         }
 
-        const earningsHtml = earnings && earnings.earnings_uah > 0
-            ? `<p class="congrats-earnings">Ты заработал сегодня <strong>+${formatUah(earnings.earnings_uah)}</strong> 💸</p>`
+        const earningsHtml = earnings && earnings.earnings > 0
+            ? `<p class="congrats-earnings">Ты заработал сегодня <strong>+${escapeHtml(formatMoney(earnings.earnings, earnings.currency_label))}</strong> 💸</p>`
             : '';
         const quoteText = (quote && quote.quote) ||
             MOTIVATION_QUOTES_FALLBACK[Math.floor(Math.random() * MOTIVATION_QUOTES_FALLBACK.length)];
         const quoteAuthorHtml = quote && quote.quote && quote.author
             ? `<span class="congrats-quote-author">— ${escapeHtml(quote.author)}</span>`
+            : '';
+
+        // Итог считаем по самой разбивке, а не по totalSecondsToday: так сумма всегда сходится
+        // с показанным списком, даже если между треком и запросом разбивки время изменилось
+        const todayTasks = (breakdown && breakdown.tasks) || [];
+        const tasksSeconds = todayTasks.reduce((sum, task) => sum + (task.seconds || 0), 0);
+        const tasksHtml = todayTasks.length
+            ? '<div class="congrats-tasks">' +
+                `<p class="congrats-tasks-title">Задачи за сегодня: ${todayTasks.length} · ${escapeHtml(formatDuration(tasksSeconds))}</p>` +
+                todayTasksListHtml(todayTasks, { withStatus: false }) +
+                '</div>'
             : '';
 
         await showModal(
@@ -2027,9 +2089,10 @@
                 '<div class="congrats-emoji">🎊🥳🎊</div>' +
                 '<p class="congrats-text">Ты сегодня хорошо поработал!</p>' +
                 earningsHtml +
+                tasksHtml +
                 `<p class="congrats-quote">«${escapeHtml(quoteText)}»${quoteAuthorHtml}</p>` +
                 '</div>',
-            [{ label: 'Спасибо!', primary: true, value: true }]
+            [{ label: 'Отдыхать', primary: true, value: true }]
         );
     }
 
@@ -2072,21 +2135,7 @@
         const bodyHtml = '<div class="today-tasks-modal">' +
             (tasks.length === 0
                 ? '<p class="today-tasks-empty">Сегодня время ещё не затрекано.</p>'
-                : '<div class="today-tasks-list">' +
-                    tasks
-                        .map(
-                            (task) =>
-                                '<a class="today-task-item" href="' +
-                                escapeHtml(task.link) +
-                                '" target="_blank" rel="noopener">' +
-                                `<span class="today-task-id">${escapeHtml(task.task_id)}</span>` +
-                                `<span class="today-task-title">${escapeHtml(task.title)}</span>` +
-                                `<span class="today-task-status">${escapeHtml(task.status || '')}</span>` +
-                                `<span class="today-task-time">${escapeHtml(formatDuration(task.seconds))}</span>` +
-                                '</a>'
-                        )
-                        .join('') +
-                    '</div>') +
+                : todayTasksListHtml(tasks)) +
             '</div>';
 
         const title = tasks.length === 0 ? 'Задачи за сегодня' : `Задачи за сегодня (${tasks.length})`;

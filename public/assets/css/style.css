@@ -1,6 +1,7 @@
 /* ==================== Тема (macOS Tahoe / Liquid Glass) ==================== */
 
 :root {
+    --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     --accent: #0a84ff;
     --accent-soft: rgba(10, 132, 255, 0.14);
     --success: #29bd4e;
@@ -54,6 +55,16 @@ html[data-theme="dark"] {
     --worktime-lunch: #ff9f0a;
 }
 
+/* Системный emoji-шрифт с увеличенным кеглем: unicode-range ограничивает его emoji-глифами,
+   поэтому size-adjust растит только emoji, не трогая размер соседнего текста. Нужен там, где
+   emoji стоит в одной строке с мелким текстом и рядом с ним теряется. */
+@font-face {
+    font-family: "EmojiBoost";
+    src: local("Apple Color Emoji"), local("Segoe UI Emoji"), local("Noto Color Emoji");
+    unicode-range: U+203C-3299, U+1F000-1FAFF, U+2600-27BF, U+2B00-2BFF, U+FE0F;
+    size-adjust: 135%;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -64,7 +75,7 @@ html, body {
 
 body {
     margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    font-family: var(--font-ui);
     color: var(--text-primary);
     background: radial-gradient(120% 120% at 20% 0%, var(--bg-from), var(--bg-to));
     min-height: 100vh;
@@ -673,10 +684,20 @@ html[data-theme="dark"] .modal:has(.worktime) {
     text-align: center;
 }
 
+/* color emoji рисуются с альфой цвета текста (Skia), а .modal-body наследует полупрозрачный
+   --text-secondary — из-за этого emoji выглядели выцветшими; нужен непрозрачный цвет */
 .congrats-emoji {
-    font-size: 34px;
+    font-size: 38px;
     line-height: 1;
+    color: var(--text-primary);
     animation: congrats-pop 0.5s ease;
+}
+
+/* Мелкие emoji в заголовке поздравления и в строке заработка стоят вплотную к тексту 14–15px и
+   на стеклянной поверхности читаются тускло — EmojiBoost увеличивает только их (см. @font-face) */
+.modal:has(.congrats-modal) .modal-title,
+.congrats-earnings {
+    font-family: "EmojiBoost", var(--font-ui);
 }
 
 @keyframes congrats-pop {
@@ -706,6 +727,31 @@ html[data-theme="dark"] .modal:has(.worktime) {
     background: var(--surface-solid);
 }
 
+/* Список сегодняшних задач внутри поздравления — те же .today-task-* строки, что и в модалке
+   иконки-задач, но компактнее и с меньшей высотой прокрутки: тут это лишь одна из четырёх
+   секций модалки, и в окне 500×500 она не должна выдавливать цитату и кнопку за экран */
+.congrats-tasks {
+    width: 100%;
+    text-align: left;
+}
+
+.congrats-tasks-title {
+    margin: 0 0 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-tertiary);
+}
+
+.congrats-tasks .today-tasks-list {
+    max-height: 140px;
+}
+
+.congrats-tasks .today-task-item {
+    padding: 7px 10px;
+    font-size: 12.5px;
+}
+
 .congrats-quote {
     margin: 4px 0 0;
     font-size: 12.5px;
@@ -723,6 +769,25 @@ html[data-theme="dark"] .modal:has(.worktime) {
 
 .modal:has(.congrats-modal) .modal-actions {
     justify-content: center;
+}
+
+/* Поверхность плотнее стандартной .card (0.62): сквозь стекло просвечивал чек-лист с
+   прогресс-баром, и всё содержимое поздравления — включая цветные emoji — читалось выцветшим.
+   Тот же приём и тот же селектор по содержимому, что у .modal:has(.worktime) выше. */
+.modal:has(.congrats-modal) {
+    background: rgba(255, 255, 255, 0.92);
+    border-color: rgba(255, 255, 255, 0.92);
+}
+
+html[data-theme="dark"] .modal:has(.congrats-modal) {
+    background: rgba(56, 56, 60, 0.92);
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Содержимое поздравления — основным цветом текста вместо приглушённого --text-secondary
+   у .modal-body: это не пояснительный текст модалки, а сам результат дня */
+.congrats-modal {
+    color: var(--text-primary);
 }
 
 .error-text {

@@ -25,7 +25,7 @@ try {
 }
 
 try {
-    $service = new MotivationQuoteService(new QuoteClient(), $llmClient);
+    $service = new MotivationQuoteService(new QuoteClient(Config::quotesUrl()), $llmClient);
     $result = $service->generate();
 } catch (\Throwable $e) {
     respond(['error' => $e->getMessage()], 502);

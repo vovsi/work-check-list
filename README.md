@@ -28,14 +28,14 @@ Stop: `docker compose down`
 
 - `database/schema.sql` — SQLite schema (tasks, checklist, task_checklist)
 - `storage/` — created automatically: `app.sqlite` (DB file) and `exchange_rate_cache.json`
-  (USD→UAH rate cache, 6h TTL, used by the earnings calculation)
+  (USD→target currency rate cache, 6h TTL, used by the earnings calculation)
 - `src/` — classes: `Database` (connection + migrations + checklist seeding), `Config`
   (reads/validates `config/params.ini`), `TaskRepository`, `ChecklistRepository`, `TaskService`
   (find-or-create task + checklist orchestration), `JiraClient` (Jira REST API v2 client),
   `JiraSyncService` (sync, status transitions, worklogs), `LlmClient` (transport client to a
   local LLM server), `BranchNameService`, `CommitMessageService`, `DeployInstructionService`,
   `MotivationQuoteService` (all four generate text via `LlmClient`), `EarningsService`
-  (UAH earnings for time worked), `ExchangeRateClient` (USD→UAH rate with file cache)
+  (earnings for time worked), `ExchangeRateClient` (USD→target currency rate with file cache)
 - `api/` — JSON endpoints: `task.php`, `state.php`, `toggle.php`, `finish.php`,
   `delete_task.php`, `today_time_spent.php`, `get_time_spent.php`, `log_time_quick.php`,
   `log_time.php`, `update_story_points.php`, `transition_doing.php`,
@@ -112,6 +112,28 @@ brew install gh
 gh auth login
 ```
 
+## Git commands dropdown and team-specific texts
+
+Repository names, their base branches and the team-specific bits of the copied texts are config
+too — none of them live in the code:
+
+```ini
+[git]
+rebase_targets = "API3:main, Adminka:dev"
+
+[templates]
+review_skip_migration_repos = "api_v3, adminka"
+deploy_config_project = "апи3"
+```
+
+Optional. `rebase_targets` (`Label:base-branch`, comma-separated) renders the "Rebase …" entries
+of the git commands dropdown next to the branch name — each copies `git rebase origin/<base>`;
+with no value the dropdown keeps only `Create Branch` and `Push`. `review_skip_migration_repos`
+lists the repositories whose migrations the Claude review prompt must skip — with no value that
+exception paragraph is left out of the prompt. `deploy_config_project` is the project named in
+the "Добавить в конфиг …" line of the deploy template copied on the last checklist item — with
+no value the line just has no project name.
+
 ## Work day config (quick time tracking)
 
 Hovering the "time spent today" pill (top-left) reveals a circle button that opens a slider for
@@ -136,8 +158,8 @@ below.
 
 The first time-log of the day that brings today's total up to `[worktime].daily_hours` pops up
 a congrats modal with a motivation quote (see LLM config above) and, in parallel, today's
-earnings in UAH — computed from an hourly USD rate converted at the current USD→UAH exchange
-rate (cached for 6 hours, see `storage/exchange_rate_cache.json` above).
+earnings — computed from an hourly USD rate converted at the current exchange rate into the
+currency from `[currency]` (cached for 6 hours, see `storage/exchange_rate_cache.json` above).
 
 ```ini
 [salary]
@@ -148,3 +170,22 @@ working_days_per_month = 21
 Optional — defaults shown above. Hourly rate = `monthly_usd / (working_days_per_month *
 daily_hours)`. The earnings line is simply omitted from the modal if the exchange rate request
 fails or the computed amount is `0`.
+
+## Currency and external service URLs
+
+The currency the earnings are converted to, and the URLs of the keyless external services, are
+config too — nothing is hardcoded in PHP or JS:
+
+```ini
+[currency]
+code = "UAH"
+label = "грн"
+
+[services]
+exchange_rate_url = "https://open.er-api.com/v6/latest/USD"
+quotes_url = "https://zenquotes.io/api/random"
+```
+
+Optional — defaults shown above. `code` is looked up in the exchange rate response (`rates`),
+`label` is what the UI prints next to the amount. Services that need a token stay in their own
+sections (`[atlassian]`, `[llm]`).

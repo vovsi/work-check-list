@@ -7,16 +7,20 @@ namespace App;
 use RuntimeException;
 
 /**
- * Случайная цитата с zenquotes.io (бесплатный публичный API, без ключа) для MotivationQuoteService.
+ * Случайная цитата для MotivationQuoteService — адрес API берётся из конфига
+ * ([services].quotes_url, по умолчанию zenquotes.io: бесплатный публичный API, без ключа).
  * Кэша нет намеренно — цитата должна быть новой при каждом показе модалки поздравления.
  */
 final class QuoteClient
 {
-    private const API_URL = 'https://zenquotes.io/api/random';
-
     /** Длинная цитата не влезает в модалку 500×500 — перезапрашиваем, пока не попадётся короткая */
     private const MAX_LENGTH = 120;
     private const MAX_ATTEMPTS = 3;
+
+    public function __construct(
+        private readonly string $apiUrl,
+    ) {
+    }
 
     /** @return array{text: string, author: string} */
     public function randomQuote(): array
@@ -36,7 +40,7 @@ final class QuoteClient
     /** @return array{text: string, author: string} */
     private function fetchQuote(): array
     {
-        $ch = curl_init(self::API_URL);
+        $ch = curl_init($this->apiUrl);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 10,

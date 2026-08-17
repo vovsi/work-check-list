@@ -1,3 +1,4 @@
 /storage/*.sqlite
+/storage/*.json
 /.idea
 /config/params.ini
