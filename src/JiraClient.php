@@ -135,6 +135,21 @@ final class JiraClient
      */
     public function fetchTodayTimeSpentSeconds(): int
     {
+        $total = 0;
+        foreach ($this->fetchTodayTimeSpentBreakdown() as $entry) {
+            $total += $entry['seconds'];
+        }
+
+        return $total;
+    }
+
+    /**
+     * Сегодняшнее затреканное время текущего пользователя, разбитое по задачам.
+     *
+     * @return list<array{task_id: string, title: string, status: string, link: string, seconds: int}>
+     */
+    public function fetchTodayTimeSpentBreakdown(): array
+    {
         $me = $this->request('GET', '/rest/api/2/myself', null, 'при получении текущего пользователя');
         $accountId = (string) ($me['accountId'] ?? '');
 
@@ -151,12 +166,12 @@ final class JiraClient
         $jql = rawurlencode('worklogAuthor = currentUser() AND worklogDate >= startOfDay()');
         $search = $this->request(
             'GET',
-            "/rest/api/2/search/jql?jql={$jql}&fields=key&maxResults=50",
+            "/rest/api/2/search/jql?jql={$jql}&fields=key,summary,status&maxResults=50",
             null,
             'при поиске задач с сегодняшним ворклогом'
         );
 
-        $total = 0;
+        $result = [];
         foreach (($search['issues'] ?? []) as $issue) {
             $key = (string) ($issue['key'] ?? '');
             if ($key === '') {
@@ -170,6 +185,7 @@ final class JiraClient
                 "при получении ворклогов задачи {$key}"
             );
 
+            $seconds = 0;
             foreach (($data['worklogs'] ?? []) as $worklog) {
                 // В задаче есть ворклоги и других участников — считаем только свои
                 if ((string) ($worklog['author']['accountId'] ?? '') !== $accountId) {
@@ -180,11 +196,21 @@ final class JiraClient
                 if ($started === false || $started < $dayStart || $started >= $dayEnd) {
                     continue;
                 }
-                $total += (int) ($worklog['timeSpentSeconds'] ?? 0);
+                $seconds += (int) ($worklog['timeSpentSeconds'] ?? 0);
+            }
+
+            if ($seconds > 0) {
+                $result[] = [
+                    'task_id' => $key,
+                    'title' => (string) ($issue['fields']['summary'] ?? ''),
+                    'status' => (string) ($issue['fields']['status']['name'] ?? ''),
+                    'link' => rtrim($this->baseUrl, '/') . '/browse/' . $key,
+                    'seconds' => $seconds,
+                ];
             }
         }
 
-        return $total;
+        return $result;
     }
 
     /** Добавляет worklog (доп. время сверх уже затреканного) к задаче */

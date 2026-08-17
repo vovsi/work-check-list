@@ -183,6 +183,19 @@ body {
     box-shadow: var(--shadow), 0 0 0 4px var(--accent-soft);
 }
 
+/* Иконка списка задач за сегодня — та же карусель, что и кружок быстрого трека, но не
+   зависит от .available (список актуален всегда, а не только при открытой задаче) */
+.today-time-group:hover .today-tasks-btn,
+.today-tasks-btn:focus-visible {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+}
+
+.today-tasks-btn:hover {
+    box-shadow: var(--shadow), 0 0 0 4px var(--accent-soft);
+}
+
 /* Пока идёт запрос к Jira — на месте значения крутится спиннер; ширина держится,
    чтобы пилюля не «прыгала» при появлении времени */
 .today-time #today-time-value {
@@ -561,6 +574,35 @@ html[data-theme="dark"] .modal:has(.worktime) {
     flex: none;
 }
 
+/* Модалка «Задачи за сегодня» — во весь экран, тот же приём :has(), что и у
+   .modal:has(.deploy-instruction) выше: тайтл задачи может быть длинным, и в карточке
+   360px он бы всегда обрезался — во весь экран под него достаточно ширины/высоты. */
+.modal:has(.today-tasks-modal) {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+}
+
+.modal:has(.today-tasks-modal) .modal-body {
+    height: 100%;
+}
+
+.today-tasks-modal {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.today-tasks-modal .today-tasks-list {
+    max-height: none;
+}
+
+.modal:has(.today-tasks-modal) .modal-actions {
+    justify-content: flex-end;
+}
+
 /* Модалка поздравления при достижении дневной нормы часов (см. showCongratsModal в app.js) —
    единственная кнопка по центру ряда действий, а не слева (как по умолчанию у одной кнопки
    с justify-content: space-between в .modal-actions) */
@@ -641,6 +683,69 @@ html[data-theme="dark"] .modal:has(.worktime) {
     gap: 4px;
     max-height: 240px;
     overflow-y: auto;
+}
+
+/* ==================== Список задач за сегодня (модалка иконки-задач) ==================== */
+
+.today-tasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.today-tasks-empty {
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-align: center;
+}
+
+.today-task-item {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: rgba(127, 127, 127, 0.07);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-size: 13px;
+    transition: background 0.12s ease;
+}
+
+.today-task-item:hover {
+    background: var(--accent-soft);
+}
+
+.today-task-id {
+    flex: none;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+.today-task-title {
+    flex: 1;
+    min-width: 100%;
+}
+
+.today-task-status {
+    flex: none;
+    padding: 2px 7px;
+    border-radius: 8px;
+    background: rgba(127, 127, 127, 0.14);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.today-task-time {
+    flex: none;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-secondary);
 }
 
 .recent-task-item {

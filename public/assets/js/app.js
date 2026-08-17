@@ -99,6 +99,7 @@
     const todayTimeEl = document.getElementById('today-time');
     const todayTimeValueEl = document.getElementById('today-time-value');
     const trackTimeBtn = document.getElementById('track-time-btn');
+    const todayTasksBtn = document.getElementById('today-tasks-btn');
     const settingsBtn = document.getElementById('settings-btn');
     const themePopover = document.getElementById('theme-popover');
     const toastEl = document.getElementById('toast');
@@ -1806,6 +1807,43 @@
                 showToast(`В Jira затрекано ${formatDuration(minutes * 60)}`);
             },
         });
+    });
+
+    todayTasksBtn.addEventListener('click', async () => {
+        setButtonLoading(todayTasksBtn, true);
+        let tasks = [];
+        try {
+            const data = await apiCall('../api/today_time_spent_breakdown.php', {});
+            tasks = data.tasks || [];
+        } catch (e) {
+            showToast(e.message || 'Не удалось получить список задач за сегодня');
+            return;
+        } finally {
+            setButtonLoading(todayTasksBtn, false);
+        }
+
+        const bodyHtml = '<div class="today-tasks-modal">' +
+            (tasks.length === 0
+                ? '<p class="today-tasks-empty">Сегодня время ещё не затрекано.</p>'
+                : '<div class="today-tasks-list">' +
+                    tasks
+                        .map(
+                            (task) =>
+                                '<a class="today-task-item" href="' +
+                                escapeHtml(task.link) +
+                                '" target="_blank" rel="noopener">' +
+                                `<span class="today-task-id">${escapeHtml(task.task_id)}</span>` +
+                                `<span class="today-task-title">${escapeHtml(task.title)}</span>` +
+                                `<span class="today-task-status">${escapeHtml(task.status || '')}</span>` +
+                                `<span class="today-task-time">${escapeHtml(formatDuration(task.seconds))}</span>` +
+                                '</a>'
+                        )
+                        .join('') +
+                    '</div>') +
+            '</div>';
+
+        const title = tasks.length === 0 ? 'Задачи за сегодня' : `Задачи за сегодня (${tasks.length})`;
+        await showModal(title, bodyHtml, [{ label: 'Закрыть', primary: true }]);
     });
 
     /** Возврат к окну — момент «я вернулся из Jira, где мог затрекать время руками»,

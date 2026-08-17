@@ -59,6 +59,13 @@ $assetVersion = static function (string $relativePath): string {
             <path d="M19 2.5v6M16 5.5h6"/>
         </svg>
     </button>
+    <button type="button" id="today-tasks-btn" class="track-time-btn today-tasks-btn" data-tooltip="Задачи за сегодня" aria-label="Задачи, на которые затрекано время сегодня">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 4h11a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H8"/>
+            <path d="M8 4H5a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h3"/>
+            <path d="M12 9h5M12 13h5M12 17h3"/>
+        </svg>
+    </button>
 </div>
 
 <!-- Иконка настроек -->

@@ -79,6 +79,7 @@ api/
   finish.php                — POST: сбросить чек-лист («Завершить задачу»)
   delete_task.php            — POST: полностью удалить задачу и её чек-лист
   today_time_spent.php       — POST: read-only затреканное сегодня время по всем задачам
+  today_time_spent_breakdown.php — POST: read-only затреканное сегодня время по задачам (список)
   get_time_spent.php         — POST: read-only уже затреканное время по одной задаче
   log_time_quick.php         — POST: затрекать время без отметки пункта чек-листа
   log_time.php               — POST: затрекать время + отметить пункт чек-листа `time_tracking`
@@ -504,6 +505,23 @@ JQL-поиск `worklogAuthor = currentUser() AND worklogDate >= startOfDay()` �
 перед открытием модалки быстрого трека времени (см. ниже — от этого числа считаются и
 подсветка относительно нормы, и объём добавляемого времени). Периодического опроса по таймеру
 нет и не нужно.
+
+### `POST /api/today_time_spent_breakdown.php` — сегодняшнее время по задачам (список)
+
+Запрос: `{}` (параметров нет — не привязан к задаче, тот же случай, что у `today_time_spent.php`).
+
+Read-only (`JiraSyncService::getTodayTimeSpentBreakdown` → `JiraClient::fetchTodayTimeSpentBreakdown`):
+та же выборка задач и ворклогов, что у `today_time_spent.php`, но без суммирования в одно
+число — по каждой задаче с ненулевым сегодняшним временем возвращается `task_id`, `title` и
+`status` (вместе с `key` дозапрашиваются `summary`/`status` в том же JQL-поиске), `link`
+(собирается из `atlassian.base_url` + `/browse/<key>`) и `seconds`. 422/502 — та же схема, что
+у `today_time_spent.php`.
+
+Ответ: `{ "tasks": [{ "task_id": "PROJ-123", "title": "...", "status": "In Progress", "link": "https://.../browse/PROJ-123", "seconds": 1200 }, ...] }`
+
+Вызывается по клику на иконку `#today-tasks-btn` (третий кружок в `.today-time-group`,
+всплывает по наведению рядом с кружком быстрого трека) — модалка со списком задач, каждая
+строка кликабельна и ведёт на задачу в Jira в новой вкладке.
 
 ### `POST /api/get_time_spent.php` — уже затреканное время по одной задаче (read-only)
 
