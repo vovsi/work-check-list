@@ -1615,6 +1615,12 @@
                 '<div class="worktime">' +
                 `<span class="worktime-edge">${escapeHtml(WORK_TIME.start)}</span>` +
                 '<div class="worktime-track">' +
+                // Прерывистая синяя полоска-подсказка: от конца уже затреканного (зелёного)
+                // до текущего времени — докуда нужно довести бегунок, чтобы время под ним
+                // стало зелёным (см. worktime-clock--ok/--warn в render()). Стоит в разметке
+                // до бегунка, чтобы белый круг бегунка (часть самого <input>) рисовался поверх
+                // неё, а не наоборот.
+                '<span class="worktime-now-guide" data-worktime-now-guide></span>' +
                 '<span class="worktime-bubble" data-worktime-bubble></span>' +
                 // Ползунок покрывает весь рабочий день (min=0 — его начало), чтобы уже
                 // затреканное время было видно зелёной частью заполнения; левее него бегунок
@@ -1660,6 +1666,7 @@
                 const range = bodyEl.querySelector('[data-worktime-range]');
                 const bubble = bodyEl.querySelector('[data-worktime-bubble]');
                 const clock = bodyEl.querySelector('[data-worktime-clock]');
+                const nowGuide = bodyEl.querySelector('[data-worktime-now-guide]');
 
                 // Бегунок не выходит за края трека, поэтому его центр — не просто доля ширины
                 const usableWidth = () => range.clientWidth - TRACK_THUMB_SIZE;
@@ -1688,8 +1695,12 @@
 
                     const thumbCenter = centerOf(value);
                     // Границы заполнения — в пикселях, а не в процентах: только так стык зелёного
-                    // (уже затреканного) и синего (добавляемого) попадает точно под центр бегунка
-                    range.style.setProperty('--base', `${centerOf(baseMinutes)}px`);
+                    // (уже затреканного) и синего (добавляемого) попадает точно под центр бегунка.
+                    // Исключение — baseMinutes === 0: centerOf(0) не 0, а половина ширины бегунка
+                    // (танцует вокруг его центра), так что без затреканного времени всё равно
+                    // рисовалась бы полоска «фантомного» зелёного слева от бегунка после того как
+                    // его увели вправо. При нуле уже-затреканного зелёного быть не должно вообще.
+                    range.style.setProperty('--base', `${baseMinutes === 0 ? 0 : centerOf(baseMinutes)}px`);
                     range.style.setProperty('--fill', `${thumbCenter}px`);
                     if (hasLunch) {
                         range.style.setProperty('--lunch-a', `${centerOf(lunchFrom)}px`);
@@ -1706,6 +1717,32 @@
                         (now.getHours() * 60 + now.getMinutes() < startMinutes + value
                             ? 'worktime-clock--ok'
                             : 'worktime-clock--warn');
+
+                    // Полоска-подсказка: от текущего положения бегунка до реального текущего
+                    // времени — докуда ещё нужно дотянуть, чтобы время под бегунком стало
+                    // зелёным. Двигается вместе с бегунком при перетаскивании.
+                    const nowMinutes = Math.min(
+                        maxMinutes,
+                        Math.max(0, now.getHours() * 60 + now.getMinutes() - startMinutes)
+                    );
+                    if (nowMinutes > value) {
+                        // Начинается ровно от ЦЕНТРА бегунка (не от его левого/правого края).
+                        // Бегунок — круг, но его hit-область в браузере квадратная 26×26, и в
+                        // «уголках» между кругом и этим квадратом видно то, что нарисовано под
+                        // бегунком — если начинать полосу правее круга целиком, там был виден
+                        // голый жёлоб вместо штриховки. Раз полоса — позиционированный
+                        // элемент, она в любом случае рисуется поверх нативного бегунка, поэтому
+                        // сам круг вырезаем маской (.worktime-now-guide), а не смещением: маска
+                        // вырезает только ПРАВУЮ половину круга (т.к. полоса начинается ровно на
+                        // его середине), левая половина бегунка полосой вообще не занята.
+                        const guideFrom = thumbCenter;
+                        const guideTo = centerOf(nowMinutes);
+                        nowGuide.style.display = 'block';
+                        nowGuide.style.left = `${guideFrom}px`;
+                        nowGuide.style.width = `${Math.max(0, guideTo - guideFrom)}px`;
+                    } else {
+                        nowGuide.style.display = 'none';
+                    }
 
                     if (addedSeconds > 0) {
                         bubble.textContent =
@@ -1737,6 +1774,76 @@
                     }
                     summaryEl.textContent = `Будет затрекано: ${formatHoursMinutes(addedSeconds)}`;
                 }
+
+                // Подсказки по цветам жёлоба. Сам жёлоб — один <input>, а не набор элементов
+                // (см. комментарий у .worktime-range), поэтому обычный data-tooltip на всю
+                // область не подходит — зон несколько (зелёная/синяя/серая/обед/полоска-гид).
+                // Определяем зону под курсором на mousemove и водим тем же tooltipEl напрямую,
+                // а не изобретаем второй вид подсказки.
+                function zoneTooltipText(px) {
+                    const minutes = maxMinutes === 0
+                        ? 0
+                        : Math.min(
+                            maxMinutes,
+                            Math.max(0, ((px - TRACK_THUMB_SIZE / 2) / usableWidth()) * maxMinutes)
+                        );
+                    const value = Number(range.value);
+                    const now = new Date();
+                    const nowMinutes = Math.min(
+                        maxMinutes,
+                        Math.max(0, now.getHours() * 60 + now.getMinutes() - startMinutes)
+                    );
+                    if (hasLunch && minutes > lunchFrom && minutes < lunchTo) {
+                        return 'Обеденный перерыв — не идёт в трек';
+                    }
+                    if (minutes > value && minutes < nowMinutes) {
+                        return 'Уже наступило, но ещё не затрекано';
+                    }
+                    if (minutes <= baseMinutes) {
+                        return 'Уже сохранено в Jira';
+                    }
+                    if (minutes <= value) {
+                        return 'Будет добавлено при сохранении';
+                    }
+                    return 'Ещё не отработано';
+                }
+
+                // Во время перетаскивания бегунка подсказки по зонам мешают — прячем их
+                // до отпускания кнопки мыши
+                let draggingRange = false;
+                range.addEventListener('mousedown', () => {
+                    draggingRange = true;
+                    tooltipEl.classList.remove('visible');
+                });
+                document.addEventListener('mouseup', () => {
+                    draggingRange = false;
+                });
+
+                range.addEventListener('mousemove', (e) => {
+                    if (draggingRange) return;
+                    const rect = range.getBoundingClientRect();
+                    const px = e.clientX - rect.left;
+                    // Над самим круглым бегунком подсказку по зоне не показываем — там уже
+                    // свой смысл (перетаскивание), а не цвет жёлоба под ним
+                    if (Math.abs(px - centerOf(Number(range.value))) <= TRACK_THUMB_SIZE / 2) {
+                        tooltipEl.classList.remove('visible');
+                        return;
+                    }
+                    tooltipEl.textContent = zoneTooltipText(px);
+                    const tipWidth = tooltipEl.offsetWidth;
+                    const tipHeight = tooltipEl.offsetHeight;
+                    const margin = 8;
+                    let top = rect.bottom + 6;
+                    if (top + tipHeight + margin > window.innerHeight) top = rect.top - tipHeight - 6;
+                    const left = Math.min(
+                        Math.max(margin, e.clientX - tipWidth / 2),
+                        window.innerWidth - tipWidth - margin
+                    );
+                    tooltipEl.style.top = `${Math.max(margin, top)}px`;
+                    tooltipEl.style.left = `${left}px`;
+                    tooltipEl.classList.add('visible');
+                });
+                range.addEventListener('mouseleave', () => tooltipEl.classList.remove('visible'));
 
                 // Перетаскивание, клик по треку и стрелки клавиатуры — нативные, render()
                 // только доводит значение до допустимого (граница затреканного, обед)

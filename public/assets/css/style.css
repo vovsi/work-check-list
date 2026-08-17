@@ -428,6 +428,58 @@ textarea.input {
         );
 }
 
+/* Прерывистая синяя полоска-подсказка поверх жёлоба: от бегунка до текущего времени, докуда
+   его ещё нужно довести, чтобы время под ним стало зелёным. JS всегда ставит left ровно в
+   ЦЕНТР бегунка (thumbCenter), поэтому дырка-вырез под бегунок (см. mask-image ниже) центрована
+   по ЛЕВОМУ краю полоски (local x = 0) — константа, JS её не пересчитывает. */
+.worktime-now-guide {
+    position: absolute;
+    top: 30px; /* совпадает с padding-top .worktime-track — высота жёлоба .worktime-range */
+    height: 18px;
+    pointer-events: none;
+    /* Полукруглая дырка под правую половину бегунка (круг радиусом 13px = TRACK_THUMB_SIZE/2
+       в app.js с центром ровно на левом краю полоски — левая половина круга вообще не входит в
+       область полосы, поэтому маскировать её не нужно). Раньше полоску просто начинали правее
+       бегунка целиком — из-за этого в квадратных «уголках» вокруг круглого бегунка (место между
+       кругом и его квадратной hit-областью 26×26) было видно голый жёлоб без штриховки. Дырка
+       позволяет полоске закрашивать эти уголки, не закрашивая сам бегунок. */
+    -webkit-mask-image: radial-gradient(circle 13px at 0px 9px, transparent 13px, black 13.5px);
+    mask-image: radial-gradient(circle 13px at 0px 9px, transparent 13px, black 13.5px);
+    /* Предыдущие попытки (repeating-linear-gradient с фиксированными px-стопами + сдвиг
+       background-position на «расчётный» период 8/sin(45deg)) давали шов: при не-целом
+       сдвиге в 11.3137px браузер округляет позицию до целого пикселя при рендере кадра,
+       и на стыке цикла анимации (конец кадра → мгновенный возврат в 0) получается разница
+       в доли пикселя — на масштабе полосок в 4px это заметная «сломанная» диагональ.
+       Правильный приём (тот же, что у Bootstrap .progress-bar-striped): стопы в ПРОЦЕНТАХ
+       от собственного тайла (не в px) + явный КВАДРАТНЫЙ background-size. Для угла ровно
+       45/135deg это даёт математически точную бесшовную стыковку тайлов при любом целом
+       сдвиге background-position, без каких-либо расчётов синуса и без округления. */
+    background-image: linear-gradient(
+        135deg,
+        var(--accent) 25%,
+        transparent 25%,
+        transparent 50%,
+        var(--accent) 50%,
+        var(--accent) 75%,
+        transparent 75%,
+        transparent
+    );
+    background-size: 16px 16px;
+    opacity: 0.55;
+    animation: worktime-guide-scroll 1s linear infinite;
+}
+
+/* Сдвиг ровно на сторону квадратного тайла (16px) — целое число, поэтому кадр «конец»
+   пиксель-в-пиксель совпадает с кадром «начало», цикл гарантированно бесшовный */
+@keyframes worktime-guide-scroll {
+    from {
+        background-position: 16px 0;
+    }
+    to {
+        background-position: 0 0;
+    }
+}
+
 .worktime-range::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 26px;
