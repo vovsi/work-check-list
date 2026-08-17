@@ -1500,6 +1500,16 @@
     changeTaskBtn.addEventListener('click', showLinkScreen);
 
     finishTaskBtn.addEventListener('click', async () => {
+        const confirmed = await showModal(
+            'Начать заново?',
+            '<p>Все отметки чек-листа будут сброшены, задача начнётся с первого пункта.</p>',
+            [
+                { label: 'Отмена', value: false },
+                { label: 'Начать заново', primary: true, value: true },
+            ]
+        );
+        if (!confirmed) return;
+
         const data = await apiCall('../api/finish.php', { task_id: state.task.id });
         state.checklist = data.checklist;
         sessionStorage.removeItem(prLinkStorageKey());
