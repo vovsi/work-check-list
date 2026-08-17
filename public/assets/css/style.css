@@ -469,6 +469,13 @@ textarea.input {
     animation: worktime-guide-scroll 1s linear infinite;
 }
 
+/* Второй (после-обеденный) сегмент полоски — дырка под бегунок там не нужна, бегунок рядом
+   с ним не бывает (см. комментарий у второго <span> в openQuickTrackModal) */
+.worktime-now-guide--no-mask {
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
 /* Сдвиг ровно на сторону квадратного тайла (16px) — целое число, поэтому кадр «конец»
    пиксель-в-пиксель совпадает с кадром «начало», цикл гарантированно бесшовный */
 @keyframes worktime-guide-scroll {
