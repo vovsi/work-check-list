@@ -27,6 +27,17 @@ rebase_targets = "API3:main, Adminka:dev"
 review_skip_migration_repos = "api_v3, adminka"
 deploy_config_project = "апи3"
 
+; Ссылки на внутреннюю документацию команды (Confluence и т.п.) — подставляются в промпт
+; Claude-ревью рядом с соответствующими пунктами чек-листа ревьювера. Каждый ключ
+; необязателен: не задан — ссылка в промпт просто не подставляется.
+; php_code_style — стандарт стиля PHP-кода команды
+; testing_standards — стандарты написания тестов
+; api_data_format — стандарт формата данных API
+[docs]
+php_code_style = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/000000001"
+testing_standards = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/000000002"
+api_data_format = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/000000003"
+
 [atlassian]
 ; Данные для подтягивания заголовка/описания задачи из Jira при открытии (см. README).
 ; base_url — адрес вашего Jira (Cloud или Server), например https://your-domain.atlassian.net

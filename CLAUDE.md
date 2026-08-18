@@ -260,6 +260,11 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
   см. `buildReviewMigrationsExceptionBlock()` в `app.js`) и `deploy_config_project` (название
   проекта в строке «Добавить в конфиг …» шаблона выливки у пункта `send_pr`; не задано —
   строка остаётся без названия). Оба уходят на фронт через `window.DEVFLOW_CONFIG`.
+- **`[docs]`** — ссылки на внутреннюю документацию команды, которые промпт Claude-ревью
+  подставляет рядом с соответствующими пунктами: `php_code_style`, `testing_standards`,
+  `api_data_format` (`Config::reviewDocLinks()` → `window.DEVFLOW_CONFIG.reviewDocLinks` →
+  `reviewDocRef()` в `app.js`). Адреса конкретного инстанса Confluence, поэтому в коде их нет;
+  ключ не задан — ссылка в промпт просто не подставляется, сам пункт остаётся.
 - **`[salary]`** — `monthly_usd`/`working_days_per_month` (дефолты 1500/21,
   `Config::SALARY_DEFAULTS`) для расчёта часовой ставки (`Config::salaryHourlyRateUsd()` =
   `monthly_usd / (working_days_per_month * daily_hours)`) — единственный потребитель:
@@ -274,8 +279,8 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 
 Некорректные/отсутствующие значения `[worktime]`, `[salary]`, `[currency]` и `[services]` молча
 заменяются дефолтами (не роняют приложение); отсутствие `[atlassian]`/`[llm]` отключает
-соответствующие фичи целиком; отсутствие `[git]`/`[templates]` просто убирает из интерфейса
-и текстов соответствующие куски.
+соответствующие фичи целиком; отсутствие `[git]`/`[templates]`/`[docs]` просто убирает из
+интерфейса и текстов соответствующие куски.
 
 Перечисления (`[github].reviewers`, `[git].rebase_targets`, `[templates].review_skip_migration_repos`)
 разбираются одним приватным хелпером `Config::commaList()` — формат «через запятую» у всех
@@ -371,7 +376,7 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 | `git_branch` | Создать ветку в Git | Git | Запросить название ветки (кнопка «Сгенерировать» предлагает вариант через `api/generate_branch_name.php` → `BranchNameService`, LLM по заголовку/описанию задачи из Jira) → скопировать → сохранить в `tasks.git_branch` → отметить. Если ветка уже сохранена — кнопка «Оставить текущую» отмечает пункт без изменения `tasks.git_branch` |
 | `code_written` | Закоммитить код | PHP | Модалка с полем «Опишите что сделали» → кнопка «Сгенерировать Description» отправляет текст в `api/generate_commit_message.php` → `CommitMessageService` (LLM формирует **только первую строку** commit message: `#JIRA-KEY <type>: <описание до 80 символов>`, без ссылки на задачу, тела и футера — тело и ссылка теперь живут в описании PR, пункт `pr_description`) — результат копируется в буфер сразу и показывается в теле окна (генерацию можно повторять) → кнопка «Закоммитил и Запушил» отмечает пункт. Команда `git push origin <ветка>` к этому пункту не относится — она отдельно живёт в дропдауне git-команд у названия ветки (`GIT_ACTION_COMMANDS.push`, см. Frontend ниже) |
 | `pull_request` | Создать PR | GitHub | Шаг 1 — показать команду `gh pr create --draft ...` (ревьюверы из `config/params.ini`, `github.reviewers`, собирается в `buildGhPrCreateCommand()`) с кнопкой «Скопировать»; шаг 2 — запросить ссылку на созданный PR → сохранить в `sessionStorage` (читают пункты `claude_review`, `jira_description`, `send_pr`) → отметить |
-| `claude_review` | Проверить PR Claude Code | Claude | Показать промпт для ревью (со ссылкой на PR из `sessionStorage`, шаг `pull_request`; блок «Важное исключение» про репозитории без миграций добавляется, только если они перечислены в `[templates].review_skip_migration_repos`), кнопка «Скопировать» в теле окна копирует без отметки (можно повторять) → «Готово» в панели действий отмечает. После отметки — вопрос «Есть ещё один проект?»: при «Да» откатывает пункты `code_written`/`pull_request`/`claude_review` (`rewindTo('code_written')`, сам `claude_review` при этом не отмечается) для повторного цикла коммит→PR→ревью по второму репозиторию мультирепо-задачи |
+| `claude_review` | Проверить PR Claude Code | Claude | Показать промпт для ревью (со ссылкой на PR из `sessionStorage`, шаг `pull_request`; блок «Важное исключение» про репозитории без миграций добавляется, только если они перечислены в `[templates].review_skip_migration_repos`; ссылки на внутреннюю документацию подставляются из `[docs]` через `reviewDocRef()` — не задано, пункт остаётся без ссылки), кнопка «Скопировать» в теле окна копирует без отметки (можно повторять) → «Готово» в панели действий отмечает. После отметки — вопрос «Есть ещё один проект?»: при «Да» откатывает пункты `code_written`/`pull_request`/`claude_review` (`rewindTo('code_written')`, сам `claude_review` при этом не отмечается) для повторного цикла коммит→PR→ревью по второму репозиторию мультирепо-задачи |
 | `pr_description` | Указать описание PR | GitHub | Два многострочных поля: «Опишите что сделали» (обязательное) и «Инструкция выливки» (необязательное) → «Сгенерировать» отправляет оба в `api/generate_pr_description.php` → `PrDescriptionService`: нейронка заполняет шаблон описания PR команды (`## What` / `## How` / `## Jira` / `## Checklist` / `## Screenshots / examples` / `## Breaking changes`, чек-бокс-лист копируется как есть — не отмеченным, его отмечает автор), а если инструкция выливки введена — её оформленный блок (`DeployInstructionService`, `### ❗ **ВАЖНО** ❗` / `**Перед мерджем сделать следующее:**` / `<инструкция>`; эмодзи вместо цветного текста, потому что GitHub вырезает inline-стили из описания PR) дописывается в конец через пустую строку. Инструкция не введена — блока в описании нет вообще, второго запроса к нейронке тоже. Результат копируется в буфер сразу и показывается в теле окна с отдельной кнопкой повторного копирования (генерацию можно повторять) → «Готово» отмечает пункт |
 | `status_ready_for_review` | PR`s переведены в Ready for review | GitHub | Отмечается сразу по клику — без модалки и без сетевого запроса (`markDone(item.id)`) |
 | `jira_description` | Оставить описание в Jira | Jira | Показать HTML-текст с форматированием, кнопки «Скопировать» (копирует с форматированием через `ClipboardItem`) и «Скопировать PR» (ссылка на PR из шага `pull_request`) — обе не отмечают пункт, можно повторять → «Готово» в панели действий отмечает |

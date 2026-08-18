@@ -134,6 +134,18 @@ exception paragraph is left out of the prompt. `deploy_config_project` is the pr
 the "Добавить в конфиг …" line of the deploy template copied on the last checklist item — with
 no value the line just has no project name.
 
+Links to your internal documentation are config too — the Claude review prompt cites them next
+to the matching review checklist points:
+
+```ini
+[docs]
+php_code_style = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/000000001"
+testing_standards = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/000000002"
+api_data_format = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/000000003"
+```
+
+Every key is optional — a missing one simply leaves its link out of the prompt.
+
 ## Work day config (quick time tracking)
 
 Hovering the "time spent today" pill (top-left) reveals a circle button that opens a slider for

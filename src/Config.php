@@ -36,6 +36,9 @@ final class Config
         'quotes_url' => 'https://zenquotes.io/api/random',
     ];
 
+    /** Ключи [docs] — ссылки на внутреннюю документацию команды, подставляемые в промпт Claude-ревью */
+    private const REVIEW_DOC_KEYS = ['php_code_style', 'testing_standards', 'api_data_format'];
+
     private static ?array $data = null;
 
     public static function llm(): array
@@ -250,6 +253,25 @@ final class Config
     public static function reviewSkipMigrationRepos(): array
     {
         return self::commaList(self::load()['templates'] ?? [], 'review_skip_migration_repos');
+    }
+
+    /**
+     * Ссылки на внутреннюю документацию команды (Confluence и т.п.) для промпта Claude-ревью.
+     * Адреса конкретного инстанса, поэтому в коде их нет — ключ не задан, ссылка в промпт
+     * просто не подставляется.
+     *
+     * @return array<string, string>
+     */
+    public static function reviewDocLinks(): array
+    {
+        $section = self::load()['docs'] ?? [];
+
+        $links = [];
+        foreach (self::REVIEW_DOC_KEYS as $key) {
+            $links[$key] = self::stringOrDefault($section, $key, '');
+        }
+
+        return $links;
     }
 
     /** Название проекта в шаблоне выливки («Добавить в конфиг <…>»). Не задано — строка без названия */

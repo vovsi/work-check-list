@@ -19,12 +19,14 @@ try {
     $gitRebaseTargets = Config::gitRebaseTargets();
     $reviewSkipMigrationRepos = Config::reviewSkipMigrationRepos();
     $deployConfigProject = Config::deployConfigProject();
+    $reviewDocLinks = Config::reviewDocLinks();
 } catch (\Throwable $e) {
     $githubReviewers = [];
     $workTime = Config::WORK_TIME_DEFAULTS;
     $gitRebaseTargets = [];
     $reviewSkipMigrationRepos = [];
     $deployConfigProject = '';
+    $reviewDocLinks = [];
 }
 
 // Версия статики = время последнего изменения файла: при каждой правке CSS/JS
@@ -186,7 +188,8 @@ $assetVersion = static function (string $relativePath): string {
         githubReviewers: <?= json_encode($githubReviewers, JSON_UNESCAPED_UNICODE) ?>,
         workTime: <?= json_encode($workTime, JSON_UNESCAPED_UNICODE) ?>,
         reviewSkipMigrationRepos: <?= json_encode($reviewSkipMigrationRepos, JSON_UNESCAPED_UNICODE) ?>,
-        deployConfigProject: <?= json_encode($deployConfigProject, JSON_UNESCAPED_UNICODE) ?>
+        deployConfigProject: <?= json_encode($deployConfigProject, JSON_UNESCAPED_UNICODE) ?>,
+        reviewDocLinks: <?= json_encode($reviewDocLinks, JSON_UNESCAPED_UNICODE | JSON_FORCE_OBJECT) ?>
     };
 </script>
 <script src="assets/js/app.js?v=<?= $assetVersion('assets/js/app.js') ?>"></script>
