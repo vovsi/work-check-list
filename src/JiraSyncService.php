@@ -53,6 +53,12 @@ final class JiraSyncService
         return $this->tasks->findById((int) $task['id']);
     }
 
+    /** Проверка, что задача с таким ключом реально существует в Jira (валидация ссылки при создании задачи) */
+    public function issueExists(string $taskId): bool
+    {
+        return $this->client->issueExists($taskId);
+    }
+
     public function updateStoryPoints(array $task, int $storyPoints): void
     {
         $this->client->updateStoryPoints($task['task_id'], $storyPoints);

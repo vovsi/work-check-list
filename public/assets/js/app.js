@@ -1067,6 +1067,7 @@
      * Заголовок/описание при этом всегда перечитываются из Jira (TaskService::syncJira).
      */
     async function loadTask(link) {
+        linkError.classList.add('hidden'); // ошибка предыдущей попытки не должна висеть во время новой
         try {
             const data = await apiCall('../api/task.php', { link });
             applyTaskState(data, link);

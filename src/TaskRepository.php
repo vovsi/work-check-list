@@ -84,18 +84,43 @@ final class TaskRepository
      */
     public function extractTaskId(string $link): string
     {
-        if (preg_match('~/browse/([A-Za-z0-9]+-\d+)~', $link, $matches) === 1) {
-            return strtoupper($matches[1]);
+        $taskId = $this->parseTaskId($link);
+        if ($taskId !== null) {
+            return $taskId;
         }
 
-        if (preg_match('~^([A-Za-z0-9]+-\d+)$~', trim($link), $matches) === 1) {
-            return strtoupper($matches[1]);
-        }
-
-        // Фолбэк: последний сегмент пути без query-параметров
+        // Фолбэк: последний сегмент пути без query-параметров. Нужен только для поиска уже
+        // существующих задач (их task_id мог быть вычислен так же до появления валидации) —
+        // для создания новой задачи используется строгий parseTaskId(), см. TaskService.
         $path = parse_url($link, PHP_URL_PATH) ?: $link;
         $segments = array_filter(explode('/', $path));
 
         return strtoupper((string) end($segments));
+    }
+
+    /**
+     * Строго распознаёт ключ задачи Jira (PROJ-123) в ссылке или в самом ключе.
+     * null — в строке нет ключа задачи, то есть это не ссылка на задачу Jira.
+     */
+    public function parseTaskId(string $link): ?string
+    {
+        $link = trim($link);
+
+        if (preg_match('~/browse/([A-Za-z][A-Za-z0-9]*-\d+)~', $link, $matches) === 1) {
+            return strtoupper($matches[1]);
+        }
+
+        if (preg_match('~^([A-Za-z][A-Za-z0-9]*-\d+)$~', $link, $matches) === 1) {
+            return strtoupper($matches[1]);
+        }
+
+        // Jira Cloud открывает задачу и другими URL (?selectedIssue=PROJ-1,
+        // /jira/software/projects/PROJ/boards/1?...) — ключ ищем в любом месте ссылки,
+        // но только как отдельный токен, чтобы не выхватить кусок случайного слова.
+        if (preg_match('~(?:^|[^A-Za-z0-9])([A-Za-z][A-Za-z0-9]*-\d+)(?:[^A-Za-z0-9-]|$)~', $link, $matches) === 1) {
+            return strtoupper($matches[1]);
+        }
+
+        return null;
     }
 }

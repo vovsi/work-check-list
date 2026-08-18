@@ -24,9 +24,19 @@ final class TaskService
     ) {
     }
 
+    /**
+     * @throws RuntimeException если ссылка не ведёт на задачу Jira или такой задачи в Jira нет —
+     *                          валидация ввода, задача при этом в БД не создаётся
+     */
     public function findOrCreateByLink(string $link): array
     {
-        $taskId = $this->tasks->extractTaskId($link);
+        $taskId = $this->tasks->parseTaskId($link);
+        if ($taskId === null) {
+            throw new RuntimeException(
+                'Это не похоже на задачу Jira — вставьте ссылку вида https://…/browse/PROJ-123 или ключ задачи PROJ-123'
+            );
+        }
+
         $existing = $this->tasks->findByLinkOrTaskId($link, $taskId);
 
         if ($existing !== null) {
@@ -40,6 +50,8 @@ final class TaskService
             ];
         }
 
+        $this->assertIssueExistsInJira($taskId);
+
         $task = $this->tasks->create($link, $taskId);
         $this->checklist->ensureRowsForTask((int) $task['id']);
         $task = $this->syncJira($task);
@@ -49,6 +61,30 @@ final class TaskService
             'checklist' => $this->checklist->getStatusesForTask((int) $task['id']),
             'isNew' => true,
         ];
+    }
+
+    /**
+     * Не даёт завести в БД задачу, которой нет в Jira (опечатка в ключе, ссылка на чужой
+     * инстанс, случайная ссылка с похожим на ключ текстом). Проверяются только новые задачи —
+     * уже открывавшаяся когда-то задача в проверке не нуждается.
+     * Недоступность самой Jira валидацией не считается (как и в syncJira() — best-effort):
+     * иначе при упавшей Jira приложением нельзя было бы пользоваться вообще.
+     */
+    private function assertIssueExistsInJira(string $taskId): void
+    {
+        if ($this->jiraSync === null) {
+            return;
+        }
+
+        try {
+            $exists = $this->jiraSync->issueExists($taskId);
+        } catch (Throwable $e) {
+            return;
+        }
+
+        if (!$exists) {
+            throw new RuntimeException("Задача {$taskId} не найдена в Jira — проверьте ссылку");
+        }
     }
 
     /**

@@ -45,6 +45,31 @@ final class JiraClient
         ];
     }
 
+    /**
+     * Есть ли такая задача в Jira. 404 — задачи нет (ошибкой не считается, это ответ
+     * «не найдена»); любой другой сбой (сеть, 401/403, 5xx) пробрасывается исключением —
+     * это проблема доступа/сервиса, а не приговор ссылке.
+     */
+    public function issueExists(string $taskId): bool
+    {
+        try {
+            $this->request(
+                'GET',
+                '/rest/api/2/issue/' . rawurlencode($taskId) . '?fields=summary',
+                null,
+                "при проверке существования задачи {$taskId}"
+            );
+        } catch (RuntimeException $e) {
+            if ($e->getCode() === 404) {
+                return false;
+            }
+
+            throw $e;
+        }
+
+        return true;
+    }
+
     public function updateStoryPoints(string $taskId, int $storyPoints): void
     {
         $this->request(
@@ -255,7 +280,9 @@ final class JiraClient
             throw new RuntimeException("Не удалось обратиться к Jira ({$this->baseUrl}): {$error}");
         }
         if ($status < 200 || $status >= 300) {
-            throw new RuntimeException("Jira ответила с ошибкой (HTTP {$status}) {$errorContext}");
+            // Код исключения = HTTP-статус: по нему issueExists() отличает «задачи нет» (404)
+            // от недоступности Jira или проблем с доступом
+            throw new RuntimeException("Jira ответила с ошибкой (HTTP {$status}) {$errorContext}", (int) $status);
         }
 
         if ($response === '') {

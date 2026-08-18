@@ -22,7 +22,14 @@ if ($link === '') {
 
 $taskRepository = new TaskRepository($pdo);
 $service = new TaskService($taskRepository, new ChecklistRepository($pdo), JiraSyncService::createFromConfig($taskRepository));
-$result = $service->findOrCreateByLink($link);
+
+try {
+    $result = $service->findOrCreateByLink($link);
+} catch (\Throwable $e) {
+    // Единственный источник исключений здесь — валидация ссылки (формат ключа и наличие
+    // задачи в Jira), поэтому это ошибка ввода, а не сбой сервиса
+    respond(['error' => $e->getMessage()], 422);
+}
 
 respond([
     'task' => $result['task'],
