@@ -433,6 +433,12 @@
         return `devflow_pr_link_${state.task.id}`;
     }
 
+    /** Описание, введённое в пункте «Закоммитить код» — подставляется в поле пункта «Указать
+     * описание PR», чтобы не набирать один и тот же текст дважды */
+    function commitDescriptionStorageKey() {
+        return `devflow_commit_description_${state.task.id}`;
+    }
+
     /** Форматирует секунды в компактную строку «Хч Ум» для отображения затреканного времени */
     function formatDuration(totalSeconds) {
         const totalMinutes = Math.round(totalSeconds / 60);
@@ -1331,23 +1337,33 @@
 
         // Закоммитить код — ввести описание, сгенерировать первую строку commit message нейронкой
         // (копируется в буфер сразу по готовности, кнопку можно нажимать повторно), отметка пункта —
-        // только отдельной кнопкой «Закоммитил и Запушил»
+        // только отдельной кнопкой «Закоммитил и Запушил». Введённое описание сохраняется в
+        // sessionStorage и подставляется в поле пункта «Указать описание PR»
         code_written: async (item) => {
-            const confirmed = await showModal(
+            const result = await showModal(
                 'Закоммитить код',
-                `<textarea class="input textarea" rows="4" placeholder="${escapeHtml('Опишите что сделали...')}"></textarea>` +
+                '<div class="form-modal">' +
+                    `<textarea class="input textarea" data-description placeholder="${escapeHtml('Опишите что сделали...')}"></textarea>` +
                     '<div class="modal-copy-actions">' +
                     '<button type="button" class="btn btn-secondary" data-generate-btn>Сгенерировать Description</button>' +
                     '</div>' +
-                    '<div class="snippet hidden" id="commit-message-result"></div>',
+                    '<div class="snippet hidden" id="commit-message-result"></div>' +
+                    '</div>',
                 [
-                    { label: 'Отмена', value: false },
-                    { label: 'Закоммитил и Запушил', primary: true, value: true },
+                    { label: 'Отмена', value: null },
+                    {
+                        // Объект, а не строка: пустое описание не должно читаться как отмена
+                        label: 'Закоммитил и Запушил',
+                        primary: true,
+                        getValue: () => ({
+                            description: modalBodyEl.querySelector('[data-description]').value.trim(),
+                        }),
+                    },
                 ],
                 (bodyEl) => {
                     bodyEl.querySelector('[data-generate-btn]').addEventListener('click', async (e) => {
                         const buttonEl = e.currentTarget;
-                        const description = bodyEl.querySelector('textarea').value.trim();
+                        const description = bodyEl.querySelector('[data-description]').value.trim();
                         if (!description) {
                             showToast('Опишите, что сделали');
                             return;
@@ -1372,10 +1388,11 @@
                     });
                 }
             );
-            if (!confirmed) {
+            if (!result) {
                 return;
             }
 
+            sessionStorage.setItem(commitDescriptionStorageKey(), result.description);
             await markDone(item.id);
         },
 
@@ -1441,19 +1458,6 @@
                 return;
             }
 
-            // Одна задача может затрагивать несколько репозиториев — если проект ещё есть,
-            // весь цикл «коммит → PR → ревью» повторяется для него, поэтому откатываемся
-            // к «Закоммитить код» (этот пункт не отмечаем — он тоже войдёт в новый цикл)
-            const hasMoreProjects = await showModal('Есть ещё один проект?', '', [
-                { label: 'Нет', value: false },
-                { label: 'Да', primary: true, value: true },
-            ]);
-            if (hasMoreProjects === true) {
-                await rewindTo('code_written');
-                showToast('Закоммитьте код в следующем проекте');
-                return;
-            }
-
             await markDone(item.id);
         },
 
@@ -1462,10 +1466,11 @@
         // (не указана — блока нет вообще). Результат копируется в буфер сразу по готовности; под ним
         // появляется отдельная кнопка «Скопировать» для повторного копирования (генерацию тоже можно
         // повторять), отметка пункта — только отдельной кнопкой «Готово»
+        // После «Готово» — вопрос про следующий репозиторий мультирепо-задачи (см. ниже)
         pr_description: async (item) => {
             const confirmed = await showModal(
                 'Описание PR',
-                '<div class="pr-description">' +
+                '<div class="form-modal">' +
                     `<textarea class="input textarea" data-description placeholder="${escapeHtml('Опишите что сделали...')}"></textarea>` +
                     `<textarea class="input textarea" data-instruction placeholder="${escapeHtml('Инструкция выливки (необязательно)...')}"></textarea>` +
                     '<div class="modal-copy-actions">' +
@@ -1481,6 +1486,10 @@
                     { label: 'Готово', primary: true, value: true },
                 ],
                 (bodyEl) => {
+                    // Что сделано уже описано в пункте «Закоммитить код» — переиспользуем текст
+                    bodyEl.querySelector('[data-description]').value =
+                        sessionStorage.getItem(commitDescriptionStorageKey()) || '';
+
                     bodyEl.querySelector('[data-generate-btn]').addEventListener('click', async (e) => {
                         const buttonEl = e.currentTarget;
                         const description = bodyEl.querySelector('[data-description]').value.trim();
@@ -1518,6 +1527,19 @@
                 }
             );
             if (!confirmed) {
+                return;
+            }
+
+            // Одна задача может затрагивать несколько репозиториев — если проект ещё есть,
+            // весь цикл «коммит → PR → ревью → описание PR» повторяется для него, поэтому
+            // откатываемся к «Закоммитить код» (этот пункт не отмечаем — он тоже войдёт в новый цикл)
+            const hasMoreProjects = await showModal('Есть ещё один проект?', '', [
+                { label: 'Нет', value: false },
+                { label: 'Да', primary: true, value: true },
+            ]);
+            if (hasMoreProjects === true) {
+                await rewindTo('code_written');
+                showToast('Закоммитьте код в следующем проекте');
                 return;
             }
 
