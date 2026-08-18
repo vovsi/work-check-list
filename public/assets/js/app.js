@@ -266,7 +266,7 @@
         'code_written',
         'pull_request',
         'claude_review',
-        'deploy_instruction',
+        'pr_description',
         'jira_description',
         'send_pr',
     ]);
@@ -338,7 +338,7 @@
         code_written: 'php',
         pull_request: 'github',
         claude_review: 'claude',
-        deploy_instruction: 'github',
+        pr_description: 'github',
         status_ready_for_review: 'github',
         jira_description: 'jira',
         status_pull_request: 'jira',
@@ -1282,8 +1282,8 @@
             }
         },
 
-        // Закоммитить код — ввести описание, сгенерировать Commit Message нейронкой (копируется
-        // в буфер сразу по готовности, кнопку можно нажимать повторно), отметка пункта —
+        // Закоммитить код — ввести описание, сгенерировать первую строку commit message нейронкой
+        // (копируется в буфер сразу по готовности, кнопку можно нажимать повторно), отметка пункта —
         // только отдельной кнопкой «Закоммитил и Запушил»
         code_written: async (item) => {
             const confirmed = await showModal(
@@ -1311,7 +1311,6 @@
                             const data = await apiCall('../api/generate_commit_message.php', {
                                 description,
                                 task_id: state.task.task_id,
-                                task_link: state.task.task_link,
                             });
                             await copyText(data.message);
                             notifyCopied('commit message');
@@ -1411,56 +1410,63 @@
             await markDone(item.id);
         },
 
-        // Указать инструкцию выливки — ввести сырой текст, сгенерировать читаемое markdown-описание
-        // для PR нейронкой (копируется в буфер сразу по готовности; под результатом появляется
-        // отдельная кнопка «Скопировать» для повторного копирования, генерацию тоже можно
+        // Указать описание PR — ввести, что сделано, и (необязательно) инструкцию выливки;
+        // нейронка собирает описание PR по шаблону команды, инструкция — отдельным блоком в конец
+        // (не указана — блока нет вообще). Результат копируется в буфер сразу по готовности; под ним
+        // появляется отдельная кнопка «Скопировать» для повторного копирования (генерацию тоже можно
         // повторять), отметка пункта — только отдельной кнопкой «Готово»
-        deploy_instruction: async (item) => {
+        pr_description: async (item) => {
             const confirmed = await showModal(
-                'Инструкция выливки',
-                '<div class="deploy-instruction">' +
-                    `<textarea class="input textarea" placeholder="${escapeHtml('Что нужно сделать перед мерджем...')}"></textarea>` +
+                'Описание PR',
+                '<div class="pr-description">' +
+                    `<textarea class="input textarea" data-description placeholder="${escapeHtml('Опишите что сделали...')}"></textarea>` +
+                    `<textarea class="input textarea" data-instruction placeholder="${escapeHtml('Инструкция выливки (необязательно)...')}"></textarea>` +
                     '<div class="modal-copy-actions">' +
                     '<button type="button" class="btn btn-secondary" data-generate-btn>Сгенерировать</button>' +
                     '</div>' +
-                    '<div class="snippet hidden" id="deploy-instruction-result"></div>' +
-                    '<div class="modal-copy-actions hidden" id="deploy-instruction-copy-actions">' +
+                    '<div class="snippet hidden" id="pr-description-result"></div>' +
+                    '<div class="modal-copy-actions hidden" id="pr-description-copy-actions">' +
                     '<button type="button" class="btn btn-secondary" data-copy-result-btn>Скопировать</button>' +
                     '</div>' +
                     '</div>',
                 [
                     { label: 'Отмена', value: false },
-                    { label: 'Пропустить', value: true },
                     { label: 'Готово', primary: true, value: true },
                 ],
                 (bodyEl) => {
                     bodyEl.querySelector('[data-generate-btn]').addEventListener('click', async (e) => {
                         const buttonEl = e.currentTarget;
-                        const instruction = bodyEl.querySelector('textarea').value.trim();
-                        if (!instruction) {
-                            showToast('Введите инструкцию');
+                        const description = bodyEl.querySelector('[data-description]').value.trim();
+                        const instruction = bodyEl.querySelector('[data-instruction]').value.trim();
+                        if (!description) {
+                            showToast('Опишите, что сделали');
                             return;
                         }
 
                         setButtonLoading(buttonEl, true);
                         try {
-                            const data = await apiCall('../api/generate_deploy_instruction.php', { instruction });
-                            await copyText(data.instruction);
-                            notifyCopied('инструкция для PR');
-                            const resultEl = bodyEl.querySelector('#deploy-instruction-result');
-                            resultEl.textContent = data.instruction;
+                            const data = await apiCall('../api/generate_pr_description.php', {
+                                description,
+                                instruction,
+                                task_id: state.task.task_id,
+                                task_link: state.task.task_link,
+                            });
+                            await copyText(data.description);
+                            notifyCopied('описание PR');
+                            const resultEl = bodyEl.querySelector('#pr-description-result');
+                            resultEl.textContent = data.description;
                             resultEl.classList.remove('hidden');
-                            bodyEl.querySelector('#deploy-instruction-copy-actions').classList.remove('hidden');
+                            bodyEl.querySelector('#pr-description-copy-actions').classList.remove('hidden');
                         } catch (e) {
-                            showToast(e.message || 'Не удалось сгенерировать инструкцию');
+                            showToast(e.message || 'Не удалось сгенерировать описание PR');
                         } finally {
                             setButtonLoading(buttonEl, false);
                         }
                     });
                     bodyEl.querySelector('[data-copy-result-btn]').addEventListener('click', async () => {
-                        const result = bodyEl.querySelector('#deploy-instruction-result').textContent;
+                        const result = bodyEl.querySelector('#pr-description-result').textContent;
                         await copyText(result);
-                        notifyCopied('инструкция для PR');
+                        notifyCopied('описание PR');
                     });
                 }
             );

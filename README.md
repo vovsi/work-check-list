@@ -40,7 +40,7 @@ Stop: `docker compose down`
   `delete_task.php`, `today_time_spent.php`, `get_time_spent.php`, `log_time_quick.php`,
   `log_time.php`, `update_story_points.php`, `transition_doing.php`,
   `transition_pull_request.php`, `generate_branch_name.php`, `generate_commit_message.php`,
-  `generate_deploy_instruction.php`, `generate_motivation_quote.php`, `calc_earnings.php`
+  `generate_pr_description.php`, `generate_motivation_quote.php`, `calc_earnings.php`
 - `public/` — frontend (index.php, assets/css, assets/js)
 - `Dockerfile`, `docker-compose.yml` — containerized run (PHP 8.3 + pdo_sqlite)
 - `config/params.ini` — integrations config (Jira, LLM, GitHub, work day, salary), not in git
@@ -49,14 +49,14 @@ Stop: `docker compose down`
 See `CLAUDE.md` in this repo for the full architecture, business rules and per-endpoint
 description.
 
-## LLM config (branch name / commit message / deploy instruction / motivation quote)
+## LLM config (branch name / commit message / PR description / motivation quote)
 
 Four checklist/modal features generate text via a local LLM server (e.g. LM Studio) exposing
 `POST <host>/api/v1/chat` with `{model, system_prompt, input}`: the "Создать ветку в Git" item
-(branch name suggestion), the "Закоммитить код" item (commit message), the
-"Указать инструкцию выливки" item (deploy instruction formatting for the PR description), and
-the "reached daily hours" congrats modal (motivation quote). All four share the same `[llm]`
-config and go through one `LlmClient`.
+(branch name suggestion), the "Закоммитить код" item (commit message subject line), the
+"Указать описание PR" item (PR description filled into the team template, plus the optional
+deploy instruction block appended to it), and the "reached daily hours" congrats modal
+(motivation quote). All four share the same `[llm]` config and go through one `LlmClient`.
 
 Copy the example config and point it at your LLM server:
 

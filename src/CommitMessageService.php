@@ -8,26 +8,19 @@ namespace App;
 final class CommitMessageService
 {
     private const SYSTEM_PROMPT = <<<'PROMPT'
-Create me a Commit Message following these writing rules: 
+Create me a Commit Message subject line following these writing rules:
 Commit Message Standards
 Every commit starts with the Jira key and then follows the Conventional Commits specification.
 The key makes the ticket visible in `git log` and in blame; the type keeps changelog generation and version bumps automatic.
 Format
-`#<JIRA-KEY> <type>: <short description>
+`#<JIRA-KEY> <type>: <short description>`
 
-<task link>
-
-<body>
-
-<footer>
-` take into account line breaks and separators - this is important! don't put quotation marks "```" in Commit Message.
+Return exactly this single line — nothing else. No task link, no body, no footer, no blank lines,
+no quotation marks, no "```" fences, no explanations before or after.
 
 * #JIRA-KEY — required. The ticket this commit belongs to, with a literal `#`: `#PPO-4098`, `#BAC-1257`.
 * type — required. What kind of change (see table below).
-* short description — required. Imperative mood, present tense. Max 72 characters including the prefix. No trailing period.
-* task link — required. Use exactly the value given as "Task link" in the input below, verbatim, on its own line right after the subject.
-* body — required. Explain what and why, not how. Wrap at 100 characters.
-* footer — optional. `BREAKING CHANGE:` and co-author trailers. The ticket key is already in the prefix — don't repeat it here.
+* short description — required. Imperative mood, present tense. Max 80 characters. No trailing period.
 
 Types
 
@@ -41,7 +34,7 @@ Types
 * `chore` — Build tools, dependency updates, CI, config
 * `revert` — Revert a previous commit
 
-The type of the squashed PR commit determines the version bump at release: `feat` → MINOR, `fix` / `perf` / `refactor` / `chore` → PATCH, `BREAKING CHANGE` footer → MAJOR. The `#JIRA-KEY` prefix goes before the type and doesn't affect the bump.
+The type of the squashed PR commit determines the version bump at release: `feat` → MINOR, `fix` / `perf` / `refactor` / `chore` → PATCH. The `#JIRA-KEY` prefix goes before the type and doesn't affect the bump.
 Rules
 
 1. Jira key first — `#PPO-4098` opens every commit subject, including the squashed merge commit.
@@ -51,7 +44,7 @@ Rules
 5. One concern per commit — don't mix a feature with a refactor.
 6. No "WIP" commits in the final PR — squash or reword before marking Ready for Review.
 
-Return only the commit message itself, no explanations. 
+Return only the commit message subject line itself, no explanations.
 PROMPT;
 
     public function __construct(
@@ -59,9 +52,9 @@ PROMPT;
     ) {
     }
 
-    public function generate(string $taskId, string $description, string $taskLink): string
+    public function generate(string $taskId, string $description): string
     {
-        $input = "Jira key: {$taskId}\nTask link: {$taskLink}\nHere my description: {$description}";
+        $input = "Jira key: {$taskId}\nHere my description: {$description}";
 
         return $this->llmClient->chat(self::SYSTEM_PROMPT, $input);
     }

@@ -88,8 +88,10 @@ src/
   LlmClient.php            — общий транспортный клиент к локальной нейронке (Client),
                              не знает про конкретные промпты
   BranchNameService.php    — генерация имени git-ветки через LlmClient (Service)
-  CommitMessageService.php — генерация commit message через LlmClient (Service)
+  CommitMessageService.php — генерация первой строки commit message через LlmClient (Service)
   DeployInstructionService.php — форматирование инструкции выливки для PR через LlmClient (Service)
+  PrDescriptionService.php  — описание PR по шаблону команды через LlmClient + опциональный
+                             блок инструкции выливки от DeployInstructionService (Service)
   MotivationQuoteService.php — цитата из QuoteClient + перевод на русский через LlmClient (Service)
   QuoteClient.php          — случайная цитата (адрес API из конфига), без кэша (Client)
   EarningsService.php      — расчёт заработка за отработанное время (Service)
@@ -110,8 +112,8 @@ api/
   transition_doing.php       — POST: перевести задачу в Jira в статус Doing + отметить пункт
   transition_pull_request.php — POST: перевести задачу в Jira в статус Pull Request + отметить пункт
   generate_branch_name.php   — POST: сгенерировать имя git-ветки (LLM)
-  generate_commit_message.php — POST: сгенерировать commit message (LLM)
-  generate_deploy_instruction.php — POST: оформить инструкцию выливки для PR (LLM)
+  generate_commit_message.php — POST: сгенерировать первую строку commit message (LLM)
+  generate_pr_description.php — POST: описание PR по шаблону + инструкция выливки (LLM)
   generate_motivation_quote.php — POST: случайная цитата из открытого API + перевод (LLM)
   calc_earnings.php          — POST: посчитать заработок за отработанные секунды (валюта из конфига)
 public/
@@ -165,14 +167,17 @@ Dockerfile, docker-compose.yml — контейнерный запуск, вес
   `[services]`), дефолты — в `Config`, а не в самих клиентах.
 - **Один Client + N Service с разными промптами (LLM-интеграция, DRY)** — `LlmClient` ничего не
   знает о конкретных промптах, только шлёт `{model, system_prompt, input}` и гибко разбирает
-  разные форматы ответа LLM-серверов. Поверх него — четыре тонких Service, у каждого свой
+  разные форматы ответа LLM-серверов. Поверх него — пять тонких Service, у каждого свой
   фиксированный системный промпт под одну задачу: `BranchNameService` (имя git-ветки, пункт
-  `git_branch`), `CommitMessageService` (commit message, пункт `code_written`),
-  `DeployInstructionService` (инструкция выливки для PR, пункт `deploy_instruction`),
+  `git_branch`), `CommitMessageService` (первая строка commit message, пункт `code_written`),
+  `DeployInstructionService` (инструкция выливки для PR), `PrDescriptionService` (описание PR
+  по шаблону команды, пункт `pr_description`; единственный Service, который поверх `LlmClient`
+  использует ещё один Service — дописывает результат `DeployInstructionService` в конец описания,
+  и только если инструкция выливки реально введена),
   `MotivationQuoteService` (перевод цитаты для модалки поздравления, см. бизнес-правила — тут
   нейронка не автор текста, а только переводчик поверх `QuoteClient`, и `LlmClient` для него
   опционален: без настроенной `[llm]` сервис отдаёт оригинал на английском).
-  Конфиг для всех четырёх один — `Config::llm()` (`[llm]` → `host`/`model` в
+  Конфиг для всех пяти один — `Config::llm()` (`[llm]` → `host`/`model` в
   `config/params.ini`). Добавляя новую LLM-фичу — не пиши новый HTTP-клиент, добавь ещё один
   Service поверх `LlmClient`.
 - **Identifier decoupled from position (стабильный `code`)** — у каждого пункта чек-листа
@@ -356,17 +361,18 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 ## Пункты чек-листа и их поведение (`code` → поведение при клике)
 
 Во всех эндпоинтах ниже `task_id` в запросе — это `tasks.id` (внутренний числовой PK), **кроме**
-`generate_commit_message.php`, где `task_id` — это Jira-ключ строкой (`tasks.task_id`); см. «API».
+`generate_commit_message.php` и `generate_pr_description.php`, где `task_id` — это Jira-ключ
+строкой (`tasks.task_id`); см. «API».
 
 | code | Заголовок | Сервис | Поведение |
 |---|---|---|---|
 | `story_points` | Указать Story Points | Jira | Модалка выбора значения (`STORY_POINTS_OPTIONS`: 1/2/3/5/8/13, с описанием сложности для каждого) → «Подтвердить» отправляет `api/update_story_points.php` → отмечается только при успешном ответе Jira (тот же паттерн, что у `status_doing`/`status_pull_request`) |
 | `status_doing` | Перевести в статус Doing | Jira | Переводит задачу в Jira в статус из `config/params.ini` (`atlassian.doing_status`, по умолчанию «Doing») через `api/transition_doing.php` → отмечается только при успешном переходе в Jira (тот же паттерн, что у `status_pull_request`/`transition_pull_request.php`) |
 | `git_branch` | Создать ветку в Git | Git | Запросить название ветки (кнопка «Сгенерировать» предлагает вариант через `api/generate_branch_name.php` → `BranchNameService`, LLM по заголовку/описанию задачи из Jira) → скопировать → сохранить в `tasks.git_branch` → отметить. Если ветка уже сохранена — кнопка «Оставить текущую» отмечает пункт без изменения `tasks.git_branch` |
-| `code_written` | Закоммитить код | PHP | Модалка с полем «Опишите что сделали» → кнопка «Сгенерировать Description» отправляет текст в `api/generate_commit_message.php` → `CommitMessageService` (LLM формирует commit message по Conventional Commits + ключ задачи) — результат копируется в буфер сразу и показывается в теле окна (генерацию можно повторять) → кнопка «Закоммитил и Запушил» отмечает пункт. Команда `git push origin <ветка>` к этому пункту не относится — она отдельно живёт в дропдауне git-команд у названия ветки (`GIT_ACTION_COMMANDS.push`, см. Frontend ниже) |
+| `code_written` | Закоммитить код | PHP | Модалка с полем «Опишите что сделали» → кнопка «Сгенерировать Description» отправляет текст в `api/generate_commit_message.php` → `CommitMessageService` (LLM формирует **только первую строку** commit message: `#JIRA-KEY <type>: <описание до 80 символов>`, без ссылки на задачу, тела и футера — тело и ссылка теперь живут в описании PR, пункт `pr_description`) — результат копируется в буфер сразу и показывается в теле окна (генерацию можно повторять) → кнопка «Закоммитил и Запушил» отмечает пункт. Команда `git push origin <ветка>` к этому пункту не относится — она отдельно живёт в дропдауне git-команд у названия ветки (`GIT_ACTION_COMMANDS.push`, см. Frontend ниже) |
 | `pull_request` | Создать PR | GitHub | Шаг 1 — показать команду `gh pr create --draft ...` (ревьюверы из `config/params.ini`, `github.reviewers`, собирается в `buildGhPrCreateCommand()`) с кнопкой «Скопировать»; шаг 2 — запросить ссылку на созданный PR → сохранить в `sessionStorage` (читают пункты `claude_review`, `jira_description`, `send_pr`) → отметить |
 | `claude_review` | Проверить PR Claude Code | Claude | Показать промпт для ревью (со ссылкой на PR из `sessionStorage`, шаг `pull_request`; блок «Важное исключение» про репозитории без миграций добавляется, только если они перечислены в `[templates].review_skip_migration_repos`), кнопка «Скопировать» в теле окна копирует без отметки (можно повторять) → «Готово» в панели действий отмечает. После отметки — вопрос «Есть ещё один проект?»: при «Да» откатывает пункты `code_written`/`pull_request`/`claude_review` (`rewindTo('code_written')`, сам `claude_review` при этом не отмечается) для повторного цикла коммит→PR→ревью по второму репозиторию мультирепо-задачи |
-| `deploy_instruction` | Указать инструкцию выливки | GitHub | Многострочное поле для сырой инструкции → «Сгенерировать» отправляет её в нейронку (`api/generate_deploy_instruction.php` → `DeployInstructionService`), которая оформляет markdown-описание для PR по фиксированному шаблону (`### ❗ **ВАЖНО** ❗` / `**Перед мерджем сделать следующее:**` / `<инструкция>` — эмодзи вместо цветного текста, потому что GitHub вырезает inline-стили из описания PR; смысл инструкции не меняется, код/идентификаторы копируются символ-в-символ) → результат копируется в буфер сразу и показывается в теле окна с отдельной кнопкой повторного копирования (генерацию можно повторять) → панель действий из 3 кнопок: «Отмена» / «Пропустить» / «Готово» — и «Пропустить», и «Готово» отмечают пункт |
+| `pr_description` | Указать описание PR | GitHub | Два многострочных поля: «Опишите что сделали» (обязательное) и «Инструкция выливки» (необязательное) → «Сгенерировать» отправляет оба в `api/generate_pr_description.php` → `PrDescriptionService`: нейронка заполняет шаблон описания PR команды (`## What` / `## How` / `## Jira` / `## Checklist` / `## Screenshots / examples` / `## Breaking changes`, чек-бокс-лист копируется как есть — не отмеченным, его отмечает автор), а если инструкция выливки введена — её оформленный блок (`DeployInstructionService`, `### ❗ **ВАЖНО** ❗` / `**Перед мерджем сделать следующее:**` / `<инструкция>`; эмодзи вместо цветного текста, потому что GitHub вырезает inline-стили из описания PR) дописывается в конец через пустую строку. Инструкция не введена — блока в описании нет вообще, второго запроса к нейронке тоже. Результат копируется в буфер сразу и показывается в теле окна с отдельной кнопкой повторного копирования (генерацию можно повторять) → «Готово» отмечает пункт |
 | `status_ready_for_review` | PR`s переведены в Ready for review | GitHub | Отмечается сразу по клику — без модалки и без сетевого запроса (`markDone(item.id)`) |
 | `jira_description` | Оставить описание в Jira | Jira | Показать HTML-текст с форматированием, кнопки «Скопировать» (копирует с форматированием через `ClipboardItem`) и «Скопировать PR» (ссылка на PR из шага `pull_request`) — обе не отмечают пункт, можно повторять → «Готово» в панели действий отмечает |
 | `status_pull_request` | Перевести задачу в Pull Request | Jira | Переводит задачу в Jira в статус из `config/params.ini` (`atlassian.pull_request_status`, по умолчанию «Pull request») через `api/transition_pull_request.php` → отмечается только при успешном переходе в Jira (тот же паттерн, что у `story_points`/`update_story_points.php`) |
@@ -378,7 +384,7 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 модалки; «Отмена» и финальная кнопка(и) — в нижней панели действий (`.modal-actions`, порядок
 описан в стандарте по числу кнопок ниже). Группа `.modal-copy-actions` есть у `git_branch`
 («Сгенерировать» / «Скопировать»), `code_written` («Сгенерировать Description»),
-`claude_review` («Скопировать»), `deploy_instruction` («Сгенерировать», затем отдельная
+`claude_review` («Скопировать»), `pr_description` («Сгенерировать», затем отдельная
 «Скопировать» после генерации), `jira_description` («Скопировать» / «Скопировать PR»),
 `send_pr` («Скопировать Link to PR» / «Скопировать Details template»). Без отдельной группы
 копирования — `story_points` (модалка с radio-выбором, без копирования) и `pull_request`
@@ -390,8 +396,8 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 - **2 кнопки** («Отмена» + финальная, либо любая другая пара) — горизонтальный ряд,
   `justify-content: space-between`, первая кнопка слева, вторая справа. Это единственный
   случай, где горизонтальное расположение допустимо.
-- **3+ кнопки** (например «Отмена» / «Оставить текущую» / «Сохранить» у `git_branch`, или
-  «Отмена» / «Пропустить» / «Готово» у `deploy_instruction`) — горизонтальный ряд на ширине
+- **3+ кнопки** (например «Отмена» / «Оставить текущую» / «Сохранить» у `git_branch`) —
+  горизонтальный ряд на ширине
   500×500 **не помещается** и рвётся неровно (часть кнопок переносится на свою строку, часть
   остаётся в предыдущей — визуально хаотично). Обязателен вертикальный full-width стек:
   `.modal-actions--stacked` (`flex-direction: column`, каждая кнопка `width: 100%`), порядок
@@ -684,7 +690,7 @@ Story Points в самой задаче Jira (`JiraSyncService::updateStoryPoint
 
 ### LLM-эндпоинты — общее для всех четырёх
 
-`generate_branch_name.php`, `generate_commit_message.php`, `generate_deploy_instruction.php` и
+`generate_branch_name.php`, `generate_commit_message.php`, `generate_pr_description.php` и
 `generate_motivation_quote.php` устроены одинаково: читают `Config::llm()` (`[llm].host`/`model`)
 и зовут `LlmClient::chat()` через свой Service (см. «Один Client + N Service» в разделе
 «Паттерны») — 502, если LLM не настроен или ответил ошибкой. Ни один из четырёх не пишет
@@ -709,39 +715,52 @@ Story Points в самой задаче Jira (`JiraSyncService::updateStoryPoint
 Вызывается кнопкой «Сгенерировать» внутри модалки пункта `git_branch` — заполняет поле ввода
 ветки результатом, индикация через `setButtonLoading`.
 
-### `POST /api/generate_commit_message.php` — сгенерировать commit message
+### `POST /api/generate_commit_message.php` — сгенерировать первую строку commit message
 
-Запрос: `{ "description": "текст изменений", "task_id": "PROJ-123", "task_link": "https://.../browse/PROJ-123" }`
+Запрос: `{ "description": "текст изменений", "task_id": "PROJ-123" }`
 
-**Внимание — единственный эндпоинт, где `task_id` не `tasks.id`, а Jira-ключ строкой**
-(`state.task.task_id` на фронте) — этот эндпоинт вообще не обращается к БД. `task_id`/
-`task_link` необязательны (пустая строка допустима), обязателен только `description` (422 при
+**Внимание — `task_id` здесь не `tasks.id`, а Jira-ключ строкой** (`state.task.task_id` на
+фронте; так же и в `generate_pr_description.php`) — этот эндпоинт вообще не обращается к БД.
+`task_id` необязателен (пустая строка допустима), обязателен только `description` (422 при
 пустом значении).
 
-Логика (`CommitMessageService::generate()`): собирает промпт (Jira-ключ + ссылка на задачу +
-описание) по стандарту команды — Conventional Commits с `#JIRA-KEY` в начале subject — и зовёт
-`LlmClient::chat()`; ответ возвращается как есть, без дополнительной пост-обработки (в отличие
-от `generate_branch_name.php`).
+Логика (`CommitMessageService::generate()`): собирает промпт (Jira-ключ + описание) по
+стандарту команды — Conventional Commits с `#JIRA-KEY` в начале subject, описание не длиннее
+80 символов — и зовёт `LlmClient::chat()`; ответ возвращается как есть, без дополнительной
+пост-обработки (в отличие от `generate_branch_name.php`). Промпт требует вернуть **ровно одну
+строку** — ссылка на задачу, тело и футер сюда больше не входят, они ушли в описание PR
+(`generate_pr_description.php`), поэтому ссылка на задачу этому эндпоинту и не передаётся.
 
-Ответ: `{ "message": "#PROJ-123 feat: ...\n\n<ссылка на задачу>\n\n..." }`
+Ответ: `{ "message": "#PROJ-123 feat: add filter for fraud user column" }`
 
 Вызывается кнопкой «Сгенерировать Description» внутри модалки пункта `code_written` —
 результат сразу копируется в буфер (`notifyCopied('commit message')`) и показывается в теле
 модалки, генерацию можно повторять.
 
-### `POST /api/generate_deploy_instruction.php` — оформить инструкцию выливки для PR
+### `POST /api/generate_pr_description.php` — собрать описание PR
 
-Запрос: `{ "instruction": "сырой текст инструкции" }` (422 при пустом значении)
+Запрос: `{ "description": "что сделано", "instruction": "сырой текст инструкции выливки",
+"task_id": "PROJ-123", "task_link": "https://.../browse/PROJ-123" }`
 
-Логика (`DeployInstructionService::generate()`): системный промпт требует не менять смысл
-текста, копировать код/SQL/идентификаторы символ-в-символ (можно только обернуть в
-inline-код/блок), не добавлять ничего от себя и подставить результат в фиксированный шаблон
-`### ❗ **ВАЖНО** ❗` / `**Перед мерджем сделать следующее:**` / `<инструкция>` — см. таблицу
-пунктов чек-листа (`deploy_instruction`) для причины эмодзи вместо цвета.
+Обязателен только `description` (422 при пустом значении); `instruction`, `task_id` и
+`task_link` необязательны. `task_id` — Jira-ключ строкой, как в
+`generate_commit_message.php`; к БД эндпоинт не обращается.
 
-Ответ: `{ "instruction": "### ❗ **ВАЖНО** ❗\n**Перед мерджем сделать следующее:**\n..." }`
+Логика (`PrDescriptionService::generate()`): системный промпт даёт нейронке шаблон описания PR
+команды (`## What` / `## How` / `## Jira` / `## Checklist` / `## Screenshots / examples` /
+`## Breaking changes`) и требует сохранить заголовки секций символ-в-символ, убрать
+HTML-комментарии-подсказки, скопировать чек-лист неотмеченным, подставить в `## Jira` ровно
+переданную ссылку, ничего не выдумывать и копировать код/идентификаторы символ-в-символ.
+Дальше — единственное бизнес-правило сервиса: если `instruction` не пустая, к описанию через
+пустую строку (`\n\n`, иначе на GitHub блок склеивается с последним абзацем описания)
+дописывается результат `DeployInstructionService::generate()` (тот же
+фиксированный шаблон `### ❗ **ВАЖНО** ❗` / `**Перед мерджем сделать следующее:**` /
+`<инструкция>`, см. таблицу пунктов чек-листа для причины эмодзи вместо цвета); если пустая —
+второго запроса к нейронке нет и блок в описание не попадает.
 
-Вызывается кнопкой «Сгенерировать» внутри модалки пункта `deploy_instruction` — результат
+Ответ: `{ "description": "## What\n...\n## Breaking changes\nNone" }`
+
+Вызывается кнопкой «Сгенерировать» внутри модалки пункта `pr_description` — результат
 копируется сразу и показывается в теле модалки с отдельной кнопкой повторного копирования,
 генерацию можно повторять.
 
