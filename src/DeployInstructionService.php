@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App;
 
-/** Оркестрирует форматирование инструкции выливки в описание PR по стандарту команды и зовёт LlmClient */
+/** Оркестрирует форматирование инструкции выливки в описание PR по стандарту команды и зовёт нейронку через LlmClientInterface */
 final class DeployInstructionService
 {
     private const SYSTEM_PROMPT = <<<'PROMPT'
@@ -45,7 +45,7 @@ SQL-запросы, названия таблиц/колонок/баз/пере
 PROMPT;
 
     public function __construct(
-        private readonly LlmClient $llmClient,
+        private readonly LlmClientInterface $llmClient,
     ) {
     }
 

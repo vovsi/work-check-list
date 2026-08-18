@@ -5,8 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
 
 use App\BranchNameService;
-use App\Config;
-use App\LlmClient;
+use App\LlmClientFactory;
 use App\TaskRepository;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -29,8 +28,7 @@ if ($task['title'] === null) {
 }
 
 try {
-    $llmConfig = Config::llm();
-    $service = new BranchNameService(new LlmClient($llmConfig['host'], $llmConfig['model']));
+    $service = new BranchNameService(LlmClientFactory::createFromConfig());
     $branchName = $service->generate($task['task_id'], $task['title'], (string) $task['description']);
 } catch (\Throwable $e) {
     respond(['error' => $e->getMessage()], 502);

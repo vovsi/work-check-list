@@ -1,12 +1,25 @@
 ; Скопируйте этот файл в params.ini и укажите свои значения.
-; params.ini не попадает в git (см. .gitignore) — в нём хранится локальный адрес нейронки.
+; params.ini не попадает в git (см. .gitignore) — в нём хранятся токены и локальные адреса.
 
+; Нейронка для генерации имени ветки, commit message, описания PR и перевода цитаты.
+; provider выбирает, куда идут запросы: "anthropic" (Claude по API) или "lmstudio" (LM Studio
+; и совместимые серверы). Настройки обоих провайдеров лежат рядом — переключение это одна
+; строка provider, ничего удалять не нужно. Не задано — "lmstudio".
+;
+; provider = "anthropic":
+;   anthropic_api_key — ключ с https://platform.claude.com (обязателен, иначе LLM-фичи отключены)
+;   anthropic_model — необязательно, по умолчанию claude-haiku-4-5 (самая дешёвая и быстрая)
+; provider = "lmstudio":
+;   lmstudio_host — адрес нейронки. Проект запущен в Docker, поэтому "localhost" изнутри контейнера
+;     указывает на сам контейнер, а не на хост-машину — используйте host.docker.internal
+;     (или IP хост-машины в локальной сети), если нейронка крутится на хосте.
+;   lmstudio_model — название модели, загруженной в LM Studio
 [llm]
-; Хост локальной нейронки. Проект запущен в Docker, поэтому "localhost" изнутри контейнера
-; указывает на сам контейнер, а не на хост-машину — используйте host.docker.internal
-; (или IP хост-машины в локальной сети), если нейронка крутится на хосте.
-host = "http://host.docker.internal:1234"
-model = "deepseek-coder-v2-lite-instruct"
+provider = "anthropic"
+anthropic_api_key = "sk-ant-..."
+anthropic_model = "claude-haiku-4-5"
+lmstudio_host = "http://host.docker.internal:1234"
+lmstudio_model = "deepseek-coder-v2-lite-instruct"
 
 [github]
 ; Ники ревьюверов для команды `gh pr create --reviewer`, через запятую при нескольких.

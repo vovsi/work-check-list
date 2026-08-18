@@ -5,8 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
 
 use App\CommitMessageService;
-use App\Config;
-use App\LlmClient;
+use App\LlmClientFactory;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     respond(['error' => 'Метод не поддерживается'], 405);
@@ -21,8 +20,7 @@ if ($description === '') {
 }
 
 try {
-    $llmConfig = Config::llm();
-    $service = new CommitMessageService(new LlmClient($llmConfig['host'], $llmConfig['model']));
+    $service = new CommitMessageService(LlmClientFactory::createFromConfig());
     $message = $service->generate($taskId, $description);
 } catch (\Throwable $e) {
     respond(['error' => $e->getMessage()], 502);

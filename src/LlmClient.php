@@ -6,8 +6,12 @@ namespace App;
 
 use RuntimeException;
 
-/** Отправляет запрос локальной нейронке по протоколу host/api/v1/chat. Ничего не знает про commit message. */
-final class LlmClient
+/**
+ * Отправляет запрос локальной нейронке (LM Studio и аналоги) по протоколу host/api/v1/chat.
+ * Ничего не знает про commit message. Альтернатива — AnthropicLlmClient, выбор между ними
+ * инкапсулирован в LlmClientFactory.
+ */
+final class LlmClient implements LlmClientInterface
 {
     public function __construct(
         private readonly string $host,

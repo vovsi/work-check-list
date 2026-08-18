@@ -39,19 +39,56 @@ final class Config
     /** Ключи [docs] — ссылки на внутреннюю документацию команды, подставляемые в промпт Claude-ревью */
     private const REVIEW_DOC_KEYS = ['php_code_style', 'testing_standards', 'api_data_format'];
 
+    /** Провайдеры нейронки для [llm].provider (см. llm() и LlmClientFactory) */
+    public const LLM_PROVIDER_ANTHROPIC = 'anthropic';
+    public const LLM_PROVIDER_LMSTUDIO = 'lmstudio';
+
+    /** Модель Claude по умолчанию — самая дешёвая и быстрая, задач тут на пару строк текста */
+    public const LLM_ANTHROPIC_MODEL_DEFAULT = 'claude-haiku-4-5';
+
     private static ?array $data = null;
 
+    /**
+     * Настройки нейронки, нормализованные под выбранного провайдера: наружу всегда уходит
+     * `provider` + `model` и специфичные для провайдера ключи (api_key либо host). Так
+     * LlmClientFactory и клиенты не разбирают конфиг сами, а переключение Claude ⇄ LM Studio —
+     * это одна строка `provider` в params.ini (настройки второго провайдера остаются на месте).
+     *
+     * @return array{provider: string, model: string, api_key?: string, host?: string}
+     */
     public static function llm(): array
     {
-        $data = self::load();
+        $section = self::load()['llm'] ?? [];
+        $provider = strtolower(self::stringOrDefault($section, 'provider', self::LLM_PROVIDER_LMSTUDIO));
 
-        if (!isset($data['llm']['host'], $data['llm']['model'])) {
+        if ($provider === self::LLM_PROVIDER_ANTHROPIC) {
+            $apiKey = self::stringOrDefault($section, 'anthropic_api_key', '');
+            if ($apiKey === '') {
+                throw new RuntimeException(
+                    'В config/params.ini не задан llm.anthropic_api_key — ключ создаётся на https://platform.claude.com'
+                );
+            }
+
+            return [
+                'provider' => self::LLM_PROVIDER_ANTHROPIC,
+                'api_key' => $apiKey,
+                'model' => self::stringOrDefault($section, 'anthropic_model', self::LLM_ANTHROPIC_MODEL_DEFAULT),
+            ];
+        }
+
+        $host = self::stringOrDefault($section, 'lmstudio_host', '');
+        $model = self::stringOrDefault($section, 'lmstudio_model', '');
+        if ($host === '' || $model === '') {
             throw new RuntimeException(
-                'В config/params.ini не заданы llm.host и llm.model — скопируйте config/params.ini.example'
+                'В config/params.ini не заданы llm.lmstudio_host и llm.lmstudio_model — скопируйте config/params.ini.example'
             );
         }
 
-        return $data['llm'];
+        return [
+            'provider' => self::LLM_PROVIDER_LMSTUDIO,
+            'host' => $host,
+            'model' => $model,
+        ];
     }
 
     public static function atlassian(): array

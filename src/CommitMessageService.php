@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App;
 
-/** Оркестрирует генерацию commit message: собирает промпт по стандарту команды и зовёт LlmClient */
+/** Оркестрирует генерацию commit message: собирает промпт по стандарту команды и зовёт нейронку через LlmClientInterface */
 final class CommitMessageService
 {
     private const SYSTEM_PROMPT = <<<'PROMPT'
@@ -48,7 +48,7 @@ Return only the commit message subject line itself, no explanations.
 PROMPT;
 
     public function __construct(
-        private readonly LlmClient $llmClient,
+        private readonly LlmClientInterface $llmClient,
     ) {
     }
 

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App;
 
-/** Оркестрирует генерацию названия git-ветки по Branch Naming Rules команды и зовёт LlmClient */
+/** Оркестрирует генерацию названия git-ветки по Branch Naming Rules команды и зовёт нейронку через LlmClientInterface */
 final class BranchNameService
 {
     private const SYSTEM_PROMPT = <<<'PROMPT'
@@ -54,7 +54,7 @@ DON'T:
 Return only the branch name itself, on a single line, no explanations, no backticks, no quotes.
 PROMPT;
 
-    public function __construct(private readonly LlmClient $llmClient)
+    public function __construct(private readonly LlmClientInterface $llmClient)
     {
     }
 

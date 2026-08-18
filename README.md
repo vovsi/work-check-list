@@ -33,8 +33,10 @@ Stop: `docker compose down`
   (reads/validates `config/params.ini`), `TaskRepository`, `ChecklistRepository`, `TaskService`
   (find-or-create task + checklist orchestration), `JiraClient` (Jira REST API v2 client),
   `JiraSyncService` (sync, status transitions, worklogs), `LlmClient` (transport client to a
-  local LLM server), `BranchNameService`, `CommitMessageService`, `DeployInstructionService`,
-  `MotivationQuoteService` (all four generate text via `LlmClient`), `EarningsService`
+  local LLM server), `AnthropicLlmClient` (transport client to Claude), `LlmClientFactory`
+  (picks one of the two by config), `BranchNameService`, `CommitMessageService`,
+  `DeployInstructionService`, `MotivationQuoteService` (all four generate text through
+  `LlmClientInterface`), `EarningsService`
   (earnings for time worked), `ExchangeRateClient` (USD→target currency rate with file cache)
 - `api/` — JSON endpoints: `task.php`, `state.php`, `toggle.php`, `finish.php`,
   `delete_task.php`, `today_time_spent.php`, `get_time_spent.php`, `log_time_quick.php`,
@@ -51,14 +53,19 @@ description.
 
 ## LLM config (branch name / commit message / PR description / motivation quote)
 
-Four checklist/modal features generate text via a local LLM server (e.g. LM Studio) exposing
-`POST <host>/api/v1/chat` with `{model, system_prompt, input}`: the "Создать ветку в Git" item
+Four checklist/modal features generate text with an LLM: the "Создать ветку в Git" item
 (branch name suggestion), the "Закоммитить код" item (commit message subject line), the
 "Указать описание PR" item (PR description filled into the team template, plus the optional
 deploy instruction block appended to it), and the "reached daily hours" congrats modal
-(motivation quote). All four share the same `[llm]` config and go through one `LlmClient`.
+(motivation quote). All four share the same `[llm]` config and go through
+`LlmClientInterface`, so they don't care which provider is configured.
 
-Copy the example config and point it at your LLM server:
+Two providers are supported, selected by `provider`: **Claude** over the Anthropic API
+(`AnthropicLlmClient`), or **LM Studio** (and compatible servers) exposing
+`POST <host>/api/v1/chat` with `{model, system_prompt, input}` (`LlmClient`). Settings for both
+live side by side — switching is a one-line change, nothing needs to be deleted.
+
+Copy the example config and fill in the provider you want:
 
 ```bash
 cp config/params.ini.example config/params.ini
@@ -66,16 +73,25 @@ cp config/params.ini.example config/params.ini
 
 ```ini
 [llm]
-host = "http://host.docker.internal:1234"
-model = "deepseek-coder-v2-lite-instruct"
+provider = "anthropic"
+anthropic_api_key = "sk-ant-..."
+anthropic_model = "claude-haiku-4-5"
+lmstudio_host = "http://host.docker.internal:1234"
+lmstudio_model = "deepseek-coder-v2-lite-instruct"
 ```
 
-`config/params.ini` is gitignored (host/model are local to your machine). Since the app runs
-in Docker, `localhost` inside the container points at the container itself — use
-`host.docker.internal` (or your host machine's LAN IP) to reach an LLM server running on the
-host. If you run the app without Docker (`php -S localhost:8000`), plain `localhost` works.
-Without this section the four LLM endpoints respond with an error — the rest of the app still
-works.
+- `provider = "anthropic"` — needs `anthropic_api_key` (create one at
+  [platform.claude.com](https://platform.claude.com)). `anthropic_model` is optional and
+  defaults to `claude-haiku-4-5` — the cheapest and fastest model, which is plenty for outputs
+  this short. No Composer dependency: the API is called over plain cURL.
+- `provider = "lmstudio"` — needs `lmstudio_host` and `lmstudio_model`. Since the app runs in Docker,
+  `localhost` inside the container points at the container itself — use `host.docker.internal`
+  (or your host machine's LAN IP) to reach an LLM server running on the host. If you run the app
+  without Docker (`php -S localhost:8000`), plain `localhost` works.
+
+`provider` is optional and defaults to `"lmstudio"`. `config/params.ini` is gitignored (the API key
+and local addresses are yours). If the selected provider isn't configured, the four LLM
+endpoints respond with an error — the rest of the app still works.
 
 ## Jira config (auto-fetch task title/description, status transitions, Story Points, time tracking)
 

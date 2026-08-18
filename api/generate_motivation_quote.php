@@ -5,7 +5,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/_bootstrap.php';
 
 use App\Config;
-use App\LlmClient;
+use App\LlmClientFactory;
 use App\MotivationQuoteService;
 use App\QuoteClient;
 
@@ -16,10 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // Нейронка тут только переводчик — без неё цитата всё равно отдаётся, на языке оригинала
-$llmClient = null;
 try {
-    $llmConfig = Config::llm();
-    $llmClient = new LlmClient($llmConfig['host'], $llmConfig['model']);
+    $llmClient = LlmClientFactory::createFromConfig();
 } catch (\Throwable $e) {
     $llmClient = null;
 }

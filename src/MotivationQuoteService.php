@@ -8,8 +8,9 @@ use Throwable;
 
 /**
  * Мотивационная цитата для модалки поздравления: реальная цитата из открытого API (QuoteClient),
- * переведённая на русский локальной нейронкой. Нейронка тут не автор, а только переводчик —
- * если она не настроена или упала, отдаём оригинал на английском, лишь бы цитата была.
+ * переведённая на русский нейронкой (локальной или Claude — см. LlmClientFactory). Нейронка тут
+ * не автор, а только переводчик — если она не настроена или упала, отдаём оригинал на
+ * английском, лишь бы цитата была.
  */
 final class MotivationQuoteService
 {
@@ -21,7 +22,7 @@ PROMPT;
 
     public function __construct(
         private readonly QuoteClient $quoteClient,
-        private readonly ?LlmClient $llmClient,
+        private readonly ?LlmClientInterface $llmClient,
     ) {
     }
 

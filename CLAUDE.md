@@ -85,14 +85,19 @@ src/
   JiraSyncService.php      — Service поверх JiraClient + TaskRepository: синхронизация,
                              переходы статусов, время; опциональность интеграции — в
                              JiraSyncService::createFromConfig()
-  LlmClient.php            — общий транспортный клиент к локальной нейронке (Client),
+  LlmClientInterface.php   — контракт транспорта к нейронке (chat(systemPrompt, input): string),
+                             общий для локальной нейронки и Claude
+  LlmClient.php            — транспортный клиент к локальной нейронке / LM Studio (Client),
                              не знает про конкретные промпты
-  BranchNameService.php    — генерация имени git-ветки через LlmClient (Service)
-  CommitMessageService.php — генерация первой строки commit message через LlmClient (Service)
-  DeployInstructionService.php — форматирование инструкции выливки для PR через LlmClient (Service)
-  PrDescriptionService.php  — описание PR по шаблону команды через LlmClient + опциональный
+  AnthropicLlmClient.php   — транспортный клиент к Claude, Anthropic Messages API (Client)
+  LlmClientFactory.php     — выбирает клиента по [llm].provider (Factory Method), как
+                             JiraSyncService::createFromConfig() у Jira
+  BranchNameService.php    — генерация имени git-ветки через LlmClientInterface (Service)
+  CommitMessageService.php — генерация первой строки commit message через LlmClientInterface (Service)
+  DeployInstructionService.php — форматирование инструкции выливки для PR через LlmClientInterface (Service)
+  PrDescriptionService.php  — описание PR по шаблону команды через LlmClientInterface + опциональный
                              блок инструкции выливки от DeployInstructionService (Service)
-  MotivationQuoteService.php — цитата из QuoteClient + перевод на русский через LlmClient (Service)
+  MotivationQuoteService.php — цитата из QuoteClient + перевод на русский через LlmClientInterface (Service)
   QuoteClient.php          — случайная цитата (адрес API из конфига), без кэша (Client)
   EarningsService.php      — расчёт заработка за отработанное время (Service)
   ExchangeRateClient.php   — курс USD→валюта из [currency], файловый кэш на 6 часов (Client)
@@ -155,7 +160,9 @@ Dockerfile, docker-compose.yml — контейнерный запуск, вес
   Jira `TaskService` получает `null` вместо сервиса и просто пропускает шаги синхронизации,
   не роняя открытие задачи).
 - **Client (транспорт без бизнес-логики)** — `JiraClient` (Jira REST API v2, Basic Auth
-  email+token), `LlmClient` (локальная нейронка, `POST <host>/api/v1/chat`), `ExchangeRateClient`
+  email+token), `LlmClient` (локальная нейронка / LM Studio, `POST <host>/api/v1/chat`),
+  `AnthropicLlmClient` (Claude, `POST https://api.anthropic.com/v1/messages`, заголовки
+  `x-api-key` + `anthropic-version`), `ExchangeRateClient`
   (курс USD→валюта из `[currency]`, файловый кэш `storage/exchange_rate_cache.json` на 6 часов,
   при недоступности сервиса — cache-aside: отдаётся последний закэшированный курс; кэш от другой
   валюты игнорируется — в файле рядом с курсом лежит её код),
@@ -165,21 +172,28 @@ Dockerfile, docker-compose.yml — контейнерный запуск, вес
   сценария использования его вызвали. **Ни у одного Client адрес внешнего сервиса не зашит в
   код** — URL/хосты и токены приходят в конструктор из `Config` (`[atlassian]`, `[llm]`,
   `[services]`), дефолты — в `Config`, а не в самих клиентах.
-- **Один Client + N Service с разными промптами (LLM-интеграция, DRY)** — `LlmClient` ничего не
-  знает о конкретных промптах, только шлёт `{model, system_prompt, input}` и гибко разбирает
-  разные форматы ответа LLM-серверов. Поверх него — пять тонких Service, у каждого свой
+- **Один Client + N Service с разными промптами (LLM-интеграция, DRY)** — клиент нейронки ничего
+  не знает о конкретных промптах, только шлёт системный промпт + ввод и разбирает ответ. Поверх
+  `LlmClientInterface` — пять тонких Service, у каждого свой
   фиксированный системный промпт под одну задачу: `BranchNameService` (имя git-ветки, пункт
   `git_branch`), `CommitMessageService` (первая строка commit message, пункт `code_written`),
   `DeployInstructionService` (инструкция выливки для PR), `PrDescriptionService` (описание PR
-  по шаблону команды, пункт `pr_description`; единственный Service, который поверх `LlmClient`
-  использует ещё один Service — дописывает результат `DeployInstructionService` в конец описания,
+  по шаблону команды, пункт `pr_description`; единственный Service, который поверх клиента
+  нейронки использует ещё один Service — дописывает результат `DeployInstructionService` в конец описания,
   и только если инструкция выливки реально введена),
   `MotivationQuoteService` (перевод цитаты для модалки поздравления, см. бизнес-правила — тут
-  нейронка не автор текста, а только переводчик поверх `QuoteClient`, и `LlmClient` для него
+  нейронка не автор текста, а только переводчик поверх `QuoteClient`, и клиент нейронки для него
   опционален: без настроенной `[llm]` сервис отдаёт оригинал на английском).
-  Конфиг для всех пяти один — `Config::llm()` (`[llm]` → `host`/`model` в
-  `config/params.ini`). Добавляя новую LLM-фичу — не пиши новый HTTP-клиент, добавь ещё один
-  Service поверх `LlmClient`.
+  Конфиг для всех пяти один — `Config::llm()` (`[llm]` в `config/params.ini`), а сам клиент все
+  пять получают из `LlmClientFactory::createFromConfig()`. **Service-ы типизированы по `LlmClientInterface`,
+  а не по конкретному клиенту** — иначе смена провайдера потребовала бы
+  правок в каждом из них. Добавляя новую LLM-фичу — не пиши новый HTTP-клиент, добавь ещё один
+  Service поверх `LlmClientInterface`.
+- **Factory Method для выбора провайдера нейронки** — `LlmClientFactory::createFromConfig()`:
+  `[llm].provider` = `anthropic` → `AnthropicLlmClient`, `lmstudio` → `LlmClient`. Знание о
+  провайдерах живёт в одном месте, `api/generate_*.php` про него не знают вообще (тот же приём,
+  что у `JiraSyncService::createFromConfig()`). **Появится третий провайдер — добавляй клиента
+  и ветку в фабрику, а не условие в эндпоинтах.**
 - **Identifier decoupled from position (стабильный `code`)** — у каждого пункта чек-листа
   есть неизменяемый `code` (например `git_branch`), отдельно от `id`/`sort_order`. Бизнес-правила
   (`ChecklistRepository::ALWAYS_DONE_ON_RESET_CODES`) и фронтовые обработчики (`ITEM_HANDLERS` в
@@ -239,10 +253,18 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 - **`[worktime]`** — `start`/`end`/`daily_hours`/`lunch_start`/`lunch_end`, разбор и дефолты —
   `Config::workTime()` (см. использование в ползунке трека времени во Frontend ниже).
   `daily_hours` также используется как порог показа модалки поздравления (см. бизнес-правила).
-- **`[llm]`** — `host`/`model` локальной нейронки (без ключа, протокол `POST <host>/api/v1/chat`,
-  см. «Один Client + N Service» в Паттернах). Без этой секции `Config::llm()` бросает
-  исключение — три из четырёх LLM-эндпоинтов отвечают 502; `generate_motivation_quote.php`
-  переживает это (нейронка там только переводчик) и отдаёт цитату на языке оригинала.
+- **`[llm]`** — какая нейронка генерирует тексты. `provider` выбирает провайдера:
+  `anthropic` — Claude (`anthropic_api_key` обязателен, `anthropic_model` необязателен,
+  по умолчанию `Config::LLM_ANTHROPIC_MODEL_DEFAULT` = `claude-haiku-4-5` — задачи тут на пару
+  строк, платить за более дорогую модель не за что), `lmstudio` — LM Studio и совместимые серверы
+  (`lmstudio_host` + `lmstudio_model`, протокол `POST <host>/api/v1/chat`). Не задан `provider` —
+  `lmstudio`. **Настройки обоих провайдеров лежат в секции одновременно и переключаются одной
+  строкой `provider`** — при добавлении новых ключей провайдера сохраняй этот принцип, не
+  заставляй удалять настройки другого. `Config::llm()` отдаёт их уже нормализованными
+  (`provider` + `model` + специфичный ключ), поэтому ни фабрика, ни клиенты конфиг не разбирают.
+  Провайдер не настроен — `Config::llm()` бросает исключение, три из четырёх LLM-эндпоинтов
+  отвечают 502; `generate_motivation_quote.php` переживает это (нейронка там только переводчик)
+  и отдаёт цитату на языке оригинала.
 - **`[github]`** — `reviewers` (список ников через запятую) для флага `--reviewer` в команде
   `gh pr create` на шаге `pull_request` (`Config::githubReviewers()`, прокидывается на фронт
   через `window.DEVFLOW_CONFIG.githubReviewers` в `public/index.php`). Не задано — флаг просто
@@ -719,9 +741,11 @@ Story Points в самой задаче Jira (`JiraSyncService::updateStoryPoint
 ### LLM-эндпоинты — общее для всех четырёх
 
 `generate_branch_name.php`, `generate_commit_message.php`, `generate_pr_description.php` и
-`generate_motivation_quote.php` устроены одинаково: читают `Config::llm()` (`[llm].host`/`model`)
-и зовут `LlmClient::chat()` через свой Service (см. «Один Client + N Service» в разделе
-«Паттерны») — 502, если LLM не настроен или ответил ошибкой. Ни один из четырёх не пишет
+`generate_motivation_quote.php` устроены одинаково: берут клиента у
+`LlmClientFactory::createFromConfig()` и зовут `chat()` через свой Service (см. «Один Client +
+N Service» в разделе «Паттерны») — 502, если LLM не настроен или ответил ошибкой. **Про
+провайдера эндпоинты не знают и `Config::llm()` сами не читают** — иначе выбор провайдера
+пришлось бы дублировать в каждом. Ни один из четырёх не пишет
 ничего в БД напрямую. Исключение — `generate_motivation_quote.php`: там нейронка только
 переводит уже полученную из внешнего API цитату, поэтому её недоступность не является ошибкой
 эндпоинта (см. ниже).
@@ -754,7 +778,7 @@ Story Points в самой задаче Jira (`JiraSyncService::updateStoryPoint
 
 Логика (`CommitMessageService::generate()`): собирает промпт (Jira-ключ + описание) по
 стандарту команды — Conventional Commits с `#JIRA-KEY` в начале subject, описание не длиннее
-80 символов — и зовёт `LlmClient::chat()`; ответ возвращается как есть, без дополнительной
+80 символов — и зовёт `chat()` клиента нейронки; ответ возвращается как есть, без дополнительной
 пост-обработки (в отличие от `generate_branch_name.php`). Промпт требует вернуть **ровно одну
 строку** — ссылка на задачу, тело и футер сюда больше не входят, они ушли в описание PR
 (`generate_pr_description.php`), поэтому ссылка на задачу этому эндпоинту и не передаётся.
@@ -799,7 +823,7 @@ HTML-комментарии-подсказки, скопировать чек-л
 Логика (`MotivationQuoteService::generate()`): цитата **не придумывается нейронкой**, а тянется
 реальной из открытого API (`QuoteClient` → `[services].quotes_url`, по умолчанию
 `zenquotes.io/api/random`, англоязычный — живых бесплатных русскоязычных API без ключа нет),
-затем переводится на русский через `LlmClient`
+затем переводится на русский через клиента нейронки
 (системный промпт: сохранить смысл и краткость, вернуть только перевод; результат чистится от
 кавычек). Перевод — best-effort: если `[llm]` не настроена или нейронка упала, отдаётся оригинал
 на английском, эндпоинт при этом не считается упавшим. 502 — только если недоступен сам сервис

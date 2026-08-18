@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/_bootstrap.php';
 
-use App\Config;
 use App\DeployInstructionService;
-use App\LlmClient;
+use App\LlmClientFactory;
 use App\PrDescriptionService;
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
@@ -24,8 +23,7 @@ if ($description === '') {
 }
 
 try {
-    $llmConfig = Config::llm();
-    $llmClient = new LlmClient($llmConfig['host'], $llmConfig['model']);
+    $llmClient = LlmClientFactory::createFromConfig();
     $service = new PrDescriptionService($llmClient, new DeployInstructionService($llmClient));
     $prDescription = $service->generate($taskId, $taskLink, $description, $instruction);
 } catch (\Throwable $e) {

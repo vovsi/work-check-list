@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App;
 
 /**
- * Оркестрирует подготовку описания PR: генерирует текст по шаблону команды через LlmClient и,
+ * Оркестрирует подготовку описания PR: генерирует текст по шаблону команды через LlmClientInterface и,
  * если задана инструкция выливки, дописывает её оформленный блок в конец (DeployInstructionService).
  */
 final class PrDescriptionService
@@ -64,7 +64,7 @@ Template:
 PROMPT;
 
     public function __construct(
-        private readonly LlmClient $llmClient,
+        private readonly LlmClientInterface $llmClient,
         private readonly DeployInstructionService $deployInstructionService,
     ) {
     }
