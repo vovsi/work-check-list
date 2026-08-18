@@ -363,7 +363,7 @@ body {
 
 .app-title {
     margin: 0 0 18px;
-    font-size: 19px;
+    font-size: 26px;
     font-weight: 600;
     letter-spacing: -0.2px;
     color: var(--text-primary);
@@ -1093,6 +1093,11 @@ html[data-theme="dark"] .modal:has(.congrats-modal) {
     color: inherit;
     text-decoration: none;
     cursor: pointer;
+}
+
+/* Эмодзи после номера — чисто декоративное, поэтому в CSS, а не в textContent ссылки */
+.task-id::after {
+    content: " 🌼";
 }
 
 .task-id:hover {

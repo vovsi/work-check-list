@@ -98,7 +98,7 @@ $assetVersion = static function (string $relativePath): string {
     <!-- Экран ввода ссылки на задачу -->
     <section id="link-screen" class="screen link-screen">
         <div class="card link-card">
-            <h1 class="app-title">DevFlow</h1>
+            <h1 class="app-title">DevFlow 🐝</h1>
             <div class="link-input-row">
                 <input
                     type="text"

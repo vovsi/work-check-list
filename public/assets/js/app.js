@@ -1821,7 +1821,7 @@
         let addedMinutes = 0;
 
         return showModal(
-            'Затрекать время',
+            'Затрекать время 🕰',
             noteHtml +
                 '<div class="worktime">' +
                 `<span class="worktime-edge">${escapeHtml(WORK_TIME.start)}</span>` +
@@ -2219,7 +2219,7 @@
                 : todayTasksListHtml(tasks)) +
             '</div>';
 
-        const title = tasks.length === 0 ? 'Задачи за сегодня' : `Задачи за сегодня (${tasks.length})`;
+        const title = tasks.length === 0 ? 'Задачи за сегодня 🍯' : `Задачи за сегодня (${tasks.length}) 🍯`;
         await showModal(title, bodyHtml, [{ label: 'Закрыть', primary: true }]);
     });
 
