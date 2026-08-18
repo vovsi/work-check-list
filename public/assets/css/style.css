@@ -158,6 +158,26 @@ body {
     color: var(--text-primary);
 }
 
+/* Дневная норма часов выполнена — зелёная пилюля с галочкой (класс ставит app.js) */
+.today-time--met {
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 16%, var(--surface));
+    border-color: color-mix(in srgb, var(--success) 40%, transparent);
+}
+
+.today-time--met:hover {
+    color: var(--success);
+}
+
+.today-time-check {
+    display: none;
+    flex: none;
+}
+
+.today-time--met .today-time-check {
+    display: block;
+}
+
 /* Кружок быстрого трека времени: выезжает из-под пилюли времени по наведению (в духе
    всплывающих подсказок Spotlight) и только когда трекать есть куда — класс .available
    ставит app.js, если открыта задача и время из Jira доступно */
@@ -302,12 +322,15 @@ body {
 
 /* ==================== Общий каркас ==================== */
 
+/* Верхний отступ = отступ кнопок от края (14) + их высота (30) + такой же зазор (14):
+   пилюля времени и кнопка настроек висят fixed поверх контента, и без этого угол карточки
+   заезжал под них в окне 500×500 */
 .app {
     height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 58px 20px 20px;
 }
 
 .screen {

@@ -401,6 +401,9 @@
     const WORK_TIME = (window.DEVFLOW_CONFIG && window.DEVFLOW_CONFIG.workTime) ||
         { start: '09:00', end: '18:00', daily_hours: 8 };
 
+    /** Дневная норма в секундах — общая и для подсветки индикатора, и для ползунка/поздравления */
+    const DAILY_NORM_SECONDS = Math.round(Number(WORK_TIME.daily_hours) * 3600);
+
     /** Шаг ползунка трека времени, минуты */
     const TRACK_STEP_MINUTES = 10;
 
@@ -1739,6 +1742,8 @@
         todayTimeLoadedAt = Date.now();
         todayTimeEl.classList.remove('hidden');
         todayTimeValueEl.textContent = formatClock(seconds);
+        // Норма за день выполнена — индикатор зеленеет и показывает галочку
+        todayTimeEl.classList.toggle('today-time--met', seconds >= DAILY_NORM_SECONDS);
         updateTrackTimeAvailability();
     }
 
@@ -1752,6 +1757,7 @@
         todayTimeLoading = true;
         todayTimeLoadedAt = Date.now();
         todayTimeEl.classList.remove('hidden');
+        todayTimeEl.classList.remove('today-time--met');
         todayTimeValueEl.innerHTML = spinnerHtml();
         try {
             const data = await apiCall('../api/today_time_spent.php', {});
@@ -1790,7 +1796,7 @@
     function openQuickTrackModal(alreadySeconds, { submit, noteHtml = '' }) {
         const startMinutes = parseClock(WORK_TIME.start);
         const maxMinutes = parseClock(WORK_TIME.end) - startMinutes;
-        const normSeconds = Math.round(Number(WORK_TIME.daily_hours) * 3600);
+        const normSeconds = DAILY_NORM_SECONDS;
         // Обед задан не всегда (Config отдаёт пустые строки, если он не влезает в рабочий день)
         const hasLunch = Boolean(WORK_TIME.lunch_start && WORK_TIME.lunch_end);
         const lunchFrom = hasLunch ? parseClock(WORK_TIME.lunch_start) - startMinutes : 0;
