@@ -158,10 +158,10 @@ final class JiraClient
      * «Сегодня» считается в таймзоне пользователя Jira (её же имеет в виду startOfDay() в JQL),
      * а не сервера — контейнер живёт в UTC и на границах суток давал бы сдвиг.
      */
-    public function fetchTodayTimeSpentSeconds(): int
+    public function fetchTodayTimeSpentSeconds(?string $ensureTaskId = null): int
     {
         $total = 0;
-        foreach ($this->fetchTodayTimeSpentBreakdown() as $entry) {
+        foreach ($this->fetchTodayTimeSpentBreakdown($ensureTaskId) as $entry) {
             $total += $entry['seconds'];
         }
 
@@ -171,9 +171,12 @@ final class JiraClient
     /**
      * Сегодняшнее затреканное время текущего пользователя, разбитое по задачам.
      *
+     * @param string|null $ensureTaskId Jira-ключ задачи, которую нужно учесть даже если
+     *                                  JQL-поиск её не вернул — см. комментарий ниже.
+     *
      * @return list<array{task_id: string, title: string, status: string, link: string, seconds: int}>
      */
-    public function fetchTodayTimeSpentBreakdown(): array
+    public function fetchTodayTimeSpentBreakdown(?string $ensureTaskId = null): array
     {
         $me = $this->request('GET', '/rest/api/2/myself', null, 'при получении текущего пользователя');
         $accountId = (string) ($me['accountId'] ?? '');
@@ -196,12 +199,41 @@ final class JiraClient
             'при поиске задач с сегодняшним ворклогом'
         );
 
-        $result = [];
+        $issues = [];
+        $keys = [];
         foreach (($search['issues'] ?? []) as $issue) {
             $key = (string) ($issue['key'] ?? '');
             if ($key === '') {
                 continue;
             }
+            $issues[] = $issue;
+            $keys[] = $key;
+        }
+
+        // Индекс JQL-поиска на Jira Cloud обновляется с задержкой: только что добавленный
+        // worklog в выборку выше ещё не попадает, и задача, в которую пользователь прямо
+        // сейчас затрекал время, потерялась бы (у первого за день трека — вместе со всем
+        // результатом). Поэтому её читаем напрямую по ключу, минуя поиск.
+        if ($ensureTaskId !== null && $ensureTaskId !== '' && !in_array($ensureTaskId, $keys, true)) {
+            // Подстраховка не должна ронять основной результат: задачи может уже не быть в Jira
+            // (переименована, удалена) — тогда просто отдаём то, что нашёл поиск
+            try {
+                $issue = $this->request(
+                    'GET',
+                    '/rest/api/2/issue/' . rawurlencode($ensureTaskId) . '?fields=summary,status',
+                    null,
+                    "при получении задачи {$ensureTaskId}"
+                );
+                $issue['key'] = $ensureTaskId;
+                $issues[] = $issue;
+            } catch (Exception $e) {
+                // намеренно игнорируем
+            }
+        }
+
+        $result = [];
+        foreach ($issues as $issue) {
+            $key = (string) $issue['key'];
 
             $data = $this->request(
                 'GET',

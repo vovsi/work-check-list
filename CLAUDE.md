@@ -606,16 +606,27 @@ activity-индикатор должен быть маленьким и неза
 
 ### `POST /api/today_time_spent.php` — затреканное сегодня время (по всем задачам)
 
-Запрос: `{}` (параметров нет — эндпоинт не привязан к задаче).
+Запрос: `{ "task_id": 1 }` — `task_id` (`tasks.id`) необязателен, см. правило про задержку
+индекса Jira ниже.
 
 Read-only: считает суммарное время ворклогов текущего пользователя Jira за сегодня по всем
-задачам (`JiraSyncService::getTodayTimeSpentSeconds` → `JiraClient::fetchTodayTimeSpentSeconds`):
+задачам (`TaskService::getTodayTimeSpentSeconds` → `JiraSyncService` →
+`JiraClient::fetchTodayTimeSpentSeconds`):
 JQL-поиск `worklogAuthor = currentUser() AND worklogDate >= startOfDay()` → ворклоги каждой
 найденной задачи → суммируются только свои и только попавшие в границы текущих суток.
 «Сегодня» считается в таймзоне пользователя Jira (`/myself` → `timeZone`), а не сервера —
 контейнер живёт в UTC и на границах суток давал бы сдвиг. 422, если интеграция с Jira не
 настроена; 502 при ошибке Jira. **Поиск идёт через `/rest/api/2/search/jql`** — старый
 `/rest/api/2/search` на Jira Cloud удалён и отвечает HTTP 410, не возвращай его.
+
+**Индекс JQL-поиска на Jira Cloud обновляется с задержкой** — только что добавленный worklog
+в выборку не попадает, поэтому сразу после трека задача (а у первого за день трека — и весь
+результат) оказывалась пустой. Отсюда необязательный `task_id`: задачу с этим `tasks.id`
+`JiraClient` читает напрямую по ключу (`/issue/<key>?fields=summary,status`) и добавляет к
+найденным поиском, если поиск её не вернул. Дозапрос — best-effort: задачи может не быть в
+Jira, тогда ошибка глотается и отдаётся то, что нашёл поиск. Фронт передаёт открытую задачу
+всегда, когда она есть (`ensureTaskPayload()` в `app.js`) — во всех вызовах обоих эндпоинтов
+сегодняшнего времени.
 
 Ответ: `{ "time_spent_seconds": 1200 }`
 
@@ -631,9 +642,11 @@ JQL-поиск `worklogAuthor = currentUser() AND worklogDate >= startOfDay()` �
 
 ### `POST /api/today_time_spent_breakdown.php` — сегодняшнее время по задачам (список)
 
-Запрос: `{}` (параметров нет — не привязан к задаче, тот же случай, что у `today_time_spent.php`).
+Запрос: `{ "task_id": 1 }` — `task_id` (`tasks.id`) необязателен, тот же смысл и та же причина
+(задержка индекса JQL), что у `today_time_spent.php`.
 
-Read-only (`JiraSyncService::getTodayTimeSpentBreakdown` → `JiraClient::fetchTodayTimeSpentBreakdown`):
+Read-only (`TaskService::getTodayTimeSpentBreakdown` → `JiraSyncService` →
+`JiraClient::fetchTodayTimeSpentBreakdown`):
 та же выборка задач и ворклогов, что у `today_time_spent.php`, но без суммирования в одно
 число — по каждой задаче с ненулевым сегодняшним временем возвращается `task_id`, `title` и
 `status` (вместе с `key` дозапрашиваются `summary`/`status` в том же JQL-поиске), `link`

@@ -1610,7 +1610,7 @@
             setItemLoading(item.id, true);
             try {
                 const [today, task] = await Promise.all([
-                    apiCall('../api/today_time_spent.php', {}),
+                    apiCall('../api/today_time_spent.php', ensureTaskPayload()),
                     apiCall('../api/get_time_spent.php', { task_id: state.task.id }),
                 ]);
                 todaySeconds = today.time_spent_seconds || 0;
@@ -1752,6 +1752,13 @@
      * цепочке загрузки задачи и ничего не блокирует: индикатор появляется сам, когда Jira
      * ответит, а при ошибке (нет интеграции, недоступна сеть) просто остаётся скрытым.
      */
+    /** Открытая сейчас задача для эндпоинтов сегодняшнего времени: её свежий worklog Jira
+     * отдаёт поиском с задержкой, поэтому задачу передаём явно — иначе только что затреканное
+     * время пропадёт и из индикатора, и из списков задач за сегодня, и из ползунка трека */
+    function ensureTaskPayload() {
+        return state.task ? { task_id: state.task.id } : {};
+    }
+
     async function loadTodayTimeSpent() {
         if (todayTimeLoading) return;
         todayTimeLoading = true;
@@ -1760,7 +1767,7 @@
         todayTimeEl.classList.remove('today-time--met');
         todayTimeValueEl.innerHTML = spinnerHtml();
         try {
-            const data = await apiCall('../api/today_time_spent.php', {});
+            const data = await apiCall('../api/today_time_spent.php', ensureTaskPayload());
             applyTodayTimeSpent(data.time_spent_seconds || 0);
         } catch (e) {
             todayTimeEl.classList.add('hidden');
@@ -2138,7 +2145,7 @@
             [earnings, quote, breakdown] = await Promise.all([
                 apiCall('../api/calc_earnings.php', { seconds: totalSecondsToday }).catch(() => null),
                 apiCall('../api/generate_motivation_quote.php', {}).catch(() => null),
-                apiCall('../api/today_time_spent_breakdown.php', {}).catch(() => null),
+                apiCall('../api/today_time_spent_breakdown.php', ensureTaskPayload()).catch(() => null),
             ]);
         } finally {
             hideGlobalLoader();
@@ -2183,7 +2190,7 @@
         setButtonLoading(trackTimeBtn, true);
         let alreadySeconds = 0;
         try {
-            const data = await apiCall('../api/today_time_spent.php', {});
+            const data = await apiCall('../api/today_time_spent.php', ensureTaskPayload());
             alreadySeconds = data.time_spent_seconds || 0;
             applyTodayTimeSpent(alreadySeconds);
         } catch (e) {
@@ -2204,7 +2211,7 @@
         setButtonLoading(todayTasksBtn, true);
         let tasks = [];
         try {
-            const data = await apiCall('../api/today_time_spent_breakdown.php', {});
+            const data = await apiCall('../api/today_time_spent_breakdown.php', ensureTaskPayload());
             tasks = data.tasks || [];
         } catch (e) {
             showToast(e.message || 'Не удалось получить список задач за сегодня');

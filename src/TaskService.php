@@ -193,6 +193,48 @@ final class TaskService
     }
 
     /**
+     * Суммарно затреканное сегодня время по всем задачам (read-only).
+     *
+     * $ensureTaskId (tasks.id, необязателен) — задача, которую нужно учесть даже если
+     * JQL-поиск Jira её ещё не вернул: индекс поиска обновляется с задержкой, поэтому сразу
+     * после трека задача из выборки выпадает (см. JiraClient::fetchTodayTimeSpentBreakdown).
+     */
+    public function getTodayTimeSpentSeconds(?int $ensureTaskId = null): int
+    {
+        if ($this->jiraSync === null) {
+            throw new RuntimeException('Интеграция с Jira не настроена — заполните config/params.ini');
+        }
+
+        return $this->jiraSync->getTodayTimeSpentSeconds($this->resolveJiraKey($ensureTaskId));
+    }
+
+    /**
+     * Сегодняшнее затреканное время, разбитое по задачам (read-only). $ensureTaskId — как выше.
+     *
+     * @return list<array{task_id: string, title: string, status: string, link: string, seconds: int}>
+     */
+    public function getTodayTimeSpentBreakdown(?int $ensureTaskId = null): array
+    {
+        if ($this->jiraSync === null) {
+            throw new RuntimeException('Интеграция с Jira не настроена — заполните config/params.ini');
+        }
+
+        return $this->jiraSync->getTodayTimeSpentBreakdown($this->resolveJiraKey($ensureTaskId));
+    }
+
+    /** Внутренний id задачи → её Jira-ключ; неизвестная задача поводом для ошибки не является */
+    private function resolveJiraKey(?int $taskId): ?string
+    {
+        if ($taskId === null || $taskId <= 0) {
+            return null;
+        }
+
+        $task = $this->tasks->findById($taskId);
+
+        return $task === null ? null : (string) $task['task_id'];
+    }
+
+    /**
      * Добавляет worklog в Jira, не касаясь чек-листа — для быстрого трека времени ползунком
      * (кружок рядом с индикатором затреканного за сегодня времени). Возвращает саму задачу.
      */

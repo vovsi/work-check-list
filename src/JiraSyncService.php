@@ -79,20 +79,23 @@ final class JiraSyncService
         return $this->client->fetchTimeSpentSeconds($task['task_id']);
     }
 
-    /** Суммарно затреканное сегодня время по всем задачам — не привязано к конкретной задаче */
-    public function getTodayTimeSpentSeconds(): int
+    /**
+     * Суммарно затреканное сегодня время по всем задачам. $ensureTaskId (Jira-ключ) — задача,
+     * которую нужно учесть даже если JQL-поиск Jira её ещё не отдал (см. JiraClient).
+     */
+    public function getTodayTimeSpentSeconds(?string $ensureTaskId = null): int
     {
-        return $this->client->fetchTodayTimeSpentSeconds();
+        return $this->client->fetchTodayTimeSpentSeconds($ensureTaskId);
     }
 
     /**
-     * Сегодняшнее затреканное время, разбитое по задачам — не привязано к конкретной задаче.
+     * Сегодняшнее затреканное время, разбитое по задачам. $ensureTaskId — как выше.
      *
      * @return list<array{task_id: string, title: string, status: string, link: string, seconds: int}>
      */
-    public function getTodayTimeSpentBreakdown(): array
+    public function getTodayTimeSpentBreakdown(?string $ensureTaskId = null): array
     {
-        return $this->client->fetchTodayTimeSpentBreakdown();
+        return $this->client->fetchTodayTimeSpentBreakdown($ensureTaskId);
     }
 
     public function addWorklog(array $task, int $seconds): void
