@@ -46,9 +46,10 @@
         '<b> Results</b><br/>1. <br/>' +
         '<b> Testing</b><br/>1. <br/>' +
         '<b> Database</b><br/>1. <br/>' +
+        '<b> Config</b><br/>1. <br/>' +
         '<b> Pull Requests</b><br/>1. <br/>';
 
-    const JIRA_DESCRIPTION_PLAIN = 'Results\n1. \n\nTesting\n1. \n\nDatabase\n1. \n\nPull Requests\n1. ';
+    const JIRA_DESCRIPTION_PLAIN = 'Results\n1. \n\nTesting\n1. \n\nDatabase\n1. \n\nConfig\n1. \n\nPull Requests\n1. ';
 
     /** Блок «Важное исключение» промпта ревью — только если в конфиге перечислены репозитории
      * без миграций (REVIEW_SKIP_MIGRATION_REPOS); пустой список — блока в промпте нет */
