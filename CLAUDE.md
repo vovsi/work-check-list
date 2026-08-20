@@ -119,6 +119,7 @@ api/
   generate_branch_name.php   — POST: сгенерировать имя git-ветки (LLM)
   generate_commit_message.php — POST: сгенерировать первую строку commit message (LLM)
   generate_pr_description.php — POST: описание PR по шаблону + инструкция выливки (LLM)
+  generate_deploy_instruction.php — POST: оформить блок инструкции выливки отдельно (LLM)
   generate_motivation_quote.php — POST: случайная цитата из открытого API + перевод (LLM)
   calc_earnings.php          — POST: посчитать заработок за отработанные секунды (валюта из конфига)
 public/
@@ -262,7 +263,7 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
   строкой `provider`** — при добавлении новых ключей провайдера сохраняй этот принцип, не
   заставляй удалять настройки другого. `Config::llm()` отдаёт их уже нормализованными
   (`provider` + `model` + специфичный ключ), поэтому ни фабрика, ни клиенты конфиг не разбирают.
-  Провайдер не настроен — `Config::llm()` бросает исключение, три из четырёх LLM-эндпоинтов
+  Провайдер не настроен — `Config::llm()` бросает исключение, четыре из пяти LLM-эндпоинтов
   отвечают 502; `generate_motivation_quote.php` переживает это (нейронка там только переводчик)
   и отдаёт цитату на языке оригинала.
 - **`[github]`** — `reviewers` (список ников через запятую) для флага `--reviewer` в команде
@@ -432,7 +433,7 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 | `story_points` | Указать Story Points | Jira | Модалка выбора значения (`STORY_POINTS_OPTIONS`: 1/2/3/5/8/13, с описанием сложности для каждого) → «Подтвердить» отправляет `api/update_story_points.php` → отмечается только при успешном ответе Jira (тот же паттерн, что у `status_doing`/`status_pull_request`) |
 | `status_doing` | Перевести в статус Doing | Jira | Переводит задачу в Jira в статус из `config/params.ini` (`atlassian.doing_status`, по умолчанию «Doing») через `api/transition_doing.php` → отмечается только при успешном переходе в Jira (тот же паттерн, что у `status_pull_request`/`transition_pull_request.php`) |
 | `git_branch` | Создать ветку в Git | Git | Запросить название ветки (кнопка «Сгенерировать» предлагает вариант через `api/generate_branch_name.php` → `BranchNameService`, LLM по заголовку/описанию задачи из Jira) → скопировать → сохранить в `tasks.git_branch` → отметить. Если ветка уже сохранена — кнопка «Оставить текущую» отмечает пункт без изменения `tasks.git_branch` |
-| `skill_commit` | Закоммитить изменения | Claude | **Только при включённом `[mode].claude_code_skill_mode`** (см. `CLAUDE_CODE_SKILL_MODE_ONLY_CODES`). Модалка без текста-превью: одна кнопка «Скопировать /commit» (команда скилла — `SKILL_COMMIT_COMMAND` в `app.js`, копирование можно повторять) → «Готово» отмечает пункт. Сам коммит делает скилл, приложение только отдаёт команду в буфер |
+| `skill_commit` | Закоммитить изменения | Claude | **Только при включённом `[mode].claude_code_skill_mode`** (см. `CLAUDE_CODE_SKILL_MODE_ONLY_CODES`). Кнопка «Скопировать /commit» (команда скилла — `SKILL_COMMIT_COMMAND` в `app.js`, копирование можно повторять): сам коммит, PR и его описание делает скилл, приложение только отдаёт команду в буфер. Ниже — необязательное поле «Инструкция выливки» и кнопка «Сгенерировать» (`api/generate_deploy_instruction.php` → `DeployInstructionService`), логика та же, что у `pr_description`: результат копируется в буфер сразу и показывается в теле окна с отдельной кнопкой повторного копирования, генерацию можно повторять. Инструкцию выливки скилл знать не может, а пункт `pr_description` в этом режиме скрыт — ввести её больше негде, поэтому она здесь; поле пустое — генерации нет, пункт отмечается как обычно → «Готово» отмечает пункт |
 | `code_written` | Закоммитить код | PHP | Модалка с полем «Опишите что сделали» → кнопка «Сгенерировать Description» отправляет текст в `api/generate_commit_message.php` → `CommitMessageService` (LLM формирует **только первую строку** commit message: `#JIRA-KEY <type>: <описание до 80 символов>`, без ссылки на задачу, тела и футера — тело и ссылка теперь живут в описании PR, пункт `pr_description`) — результат копируется в буфер сразу и показывается в теле окна (генерацию можно повторять) → кнопка «Закоммитил и Запушил» отмечает пункт и сохраняет введённое описание в `sessionStorage` (`devflow_commit_description_<task.id>`) — его подставляет в своё поле пункт `pr_description`. Команда `git push origin <ветка>` к этому пункту не относится — она отдельно живёт в дропдауне git-команд у названия ветки (`GIT_ACTION_COMMANDS.push`, см. Frontend ниже) |
 | `pull_request` | Создать PR | GitHub | Шаг 1 — показать команду `gh pr create --draft ...` (ревьюверы из `config/params.ini`, `github.reviewers`, собирается в `buildGhPrCreateCommand()`) с кнопкой «Скопировать»; шаг 2 — запросить ссылку на созданный PR → сохранить в `sessionStorage` (читают пункты `claude_review`, `jira_description`, `send_pr`) → отметить |
 | `claude_review` | Проверить PR Claude Code | Claude | Показать промпт для ревью (со ссылкой на PR из `sessionStorage`, шаг `pull_request`; блок «Важное исключение» про репозитории без миграций добавляется, только если они перечислены в `[templates].review_skip_migration_repos`; ссылки на внутреннюю документацию подставляются из `[docs]` через `reviewDocRef()` — не задано, пункт остаётся без ссылки), кнопка «Скопировать» в теле окна копирует без отметки (можно повторять) → «Готово» в панели действий отмечает |
@@ -447,7 +448,8 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 копирования/генерации — отдельные кнопки (`.btn` внутри `.modal-copy-actions`) сверху тела
 модалки; «Отмена» и финальная кнопка(и) — в нижней панели действий (`.modal-actions`, порядок
 описан в стандарте по числу кнопок ниже). Группа `.modal-copy-actions` есть у `git_branch`
-(«Сгенерировать» / «Скопировать»), `skill_commit` («Скопировать /commit»), `code_written`
+(«Сгенерировать» / «Скопировать»), `skill_commit` («Скопировать /commit», затем «Сгенерировать» и отдельная «Скопировать»
+после генерации), `code_written`
 («Сгенерировать Description»),
 `claude_review` («Скопировать»), `pr_description` («Сгенерировать», затем отдельная
 «Скопировать» после генерации), `jira_description` («Скопировать» / «Скопировать PR»),
@@ -456,7 +458,8 @@ task_checklist(id, task_id, checklist_id, is_done, UNIQUE(task_id, checklist_id)
 (своя кнопка копирования команды внутри разметки шагов `.pr-steps`, не через
 `.modal-copy-actions`).
 
-Модалки с большим многострочным вводом (`code_written`, `pr_description`) раскрываются во весь
+Модалки с большим многострочным вводом (`code_written`, `pr_description`, `skill_commit`)
+раскрываются во весь
 экран страницы вместо карточки 360px — обёртка `.form-modal` в теле модалки, вся вёрстка в CSS
 через `.modal:has(.form-modal)` (тот же приём `:has()`, что у `.worktime` и `.today-tasks-modal`).
 Добавляя новую модалку, где текстовое поле должно занимать всё окно, — оборачивай тело в
@@ -781,14 +784,14 @@ Story Points в самой задаче Jira (`JiraSyncService::updateStoryPoint
 Вызывается из обработчика `status_pull_request` в `ITEM_HANDLERS` — без модалки,
 `setItemLoading`.
 
-### LLM-эндпоинты — общее для всех четырёх
+### LLM-эндпоинты — общее для всех пяти
 
-`generate_branch_name.php`, `generate_commit_message.php`, `generate_pr_description.php` и
-`generate_motivation_quote.php` устроены одинаково: берут клиента у
+`generate_branch_name.php`, `generate_commit_message.php`, `generate_pr_description.php`,
+`generate_deploy_instruction.php` и `generate_motivation_quote.php` устроены одинаково: берут клиента у
 `LlmClientFactory::createFromConfig()` и зовут `chat()` через свой Service (см. «Один Client +
 N Service» в разделе «Паттерны») — 502, если LLM не настроен или ответил ошибкой. **Про
 провайдера эндпоинты не знают и `Config::llm()` сами не читают** — иначе выбор провайдера
-пришлось бы дублировать в каждом. Ни один из четырёх не пишет
+пришлось бы дублировать в каждом. Ни один из пяти не пишет
 ничего в БД напрямую. Исключение — `generate_motivation_quote.php`: там нейронка только
 переводит уже полученную из внешнего API цитату, поэтому её недоступность не является ошибкой
 эндпоинта (см. ниже).
@@ -858,6 +861,22 @@ HTML-комментарии-подсказки, скопировать чек-л
 Вызывается кнопкой «Сгенерировать» внутри модалки пункта `pr_description` — результат
 копируется сразу и показывается в теле модалки с отдельной кнопкой повторного копирования,
 генерацию можно повторять.
+
+### `POST /api/generate_deploy_instruction.php` — оформить инструкцию выливки
+
+Запрос: `{ "instruction": "сырой текст инструкции выливки" }`
+
+Единственный параметр обязателен (422 при пустом значении); к БД эндпоинт не обращается.
+Логика — тот же `DeployInstructionService::generate()`, что зовёт `PrDescriptionService`
+изнутри `generate_pr_description.php`, только результат отдаётся отдельным блоком, а не
+дописывается к описанию PR (**новый Service тут не нужен — переиспользуется существующий**).
+502 — LLM не настроен/ошибка нейронки.
+
+Ответ: `{ "instruction": "### ❗ **ВАЖНО** ❗\n**Перед мерджем сделать следующее:**\n..." }`
+
+Вызывается кнопкой «Сгенерировать» внутри модалки пункта `skill_commit` — в режиме
+`[mode].claude_code_skill_mode` пункт `pr_description` скрыт, а описание PR пишет скилл, и
+блок инструкции выливки нужно получить отдельно, чтобы вставить его в PR руками.
 
 ### `POST /api/generate_motivation_quote.php` — случайная мотивационная цитата
 

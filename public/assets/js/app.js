@@ -1458,13 +1458,27 @@
             await markDone(item.id);
         },
 
-        // Закоммитить изменения — шаг режима Claude Code Skill: коммит делает сам скилл, от
-        // приложения нужна только его команда в буфере. Копирование можно повторять, отметка — «Готово»
+        // Закоммитить изменения — шаг режима Claude Code Skill: коммит, PR и его описание делает
+        // сам скилл, от приложения нужна только его команда в буфере. Инструкцию выливки скилл
+        // знать не может — поэтому здесь же (в режиме скилла пункт `pr_description` скрыт, а
+        // значит ввести её больше негде) можно оформить её блок для вставки в описание PR:
+        // логика та же, что у `pr_description` — результат копируется сразу, генерацию и
+        // копирование можно повторять. Инструкция необязательна, отметка пункта — «Готово»
         skill_commit: async (item) => {
             const confirmed = await showModal(
                 'Закоммитить изменения',
-                '<div class="modal-copy-actions">' +
+                '<div class="form-modal">' +
+                    '<div class="modal-copy-actions">' +
                     `<button type="button" class="btn btn-secondary" data-copy-btn>Скопировать ${escapeHtml(SKILL_COMMIT_COMMAND)}</button>` +
+                    '</div>' +
+                    `<textarea class="input textarea" data-instruction placeholder="${escapeHtml('Инструкция выливки (необязательно)...')}"></textarea>` +
+                    '<div class="modal-copy-actions">' +
+                    '<button type="button" class="btn btn-secondary" data-generate-btn>Сгенерировать</button>' +
+                    '</div>' +
+                    '<div class="snippet hidden" id="deploy-instruction-result"></div>' +
+                    '<div class="modal-copy-actions hidden" id="deploy-instruction-copy-actions">' +
+                    '<button type="button" class="btn btn-secondary" data-copy-result-btn>Скопировать</button>' +
+                    '</div>' +
                     '</div>',
                 [
                     { label: 'Отмена', value: false },
@@ -1474,6 +1488,36 @@
                     bodyEl.querySelector('[data-copy-btn]').addEventListener('click', async () => {
                         await copyText(SKILL_COMMIT_COMMAND);
                         notifyCopied(`команда «${SKILL_COMMIT_COMMAND}»`);
+                    });
+
+                    bodyEl.querySelector('[data-generate-btn]').addEventListener('click', async (e) => {
+                        const buttonEl = e.currentTarget;
+                        const instruction = bodyEl.querySelector('[data-instruction]').value.trim();
+                        if (!instruction) {
+                            showToast('Опишите инструкцию выливки');
+                            return;
+                        }
+
+                        setButtonLoading(buttonEl, true);
+                        try {
+                            const data = await apiCall('../api/generate_deploy_instruction.php', {
+                                instruction,
+                            });
+                            await copyText(data.instruction);
+                            notifyCopied('инструкция выливки');
+                            const resultEl = bodyEl.querySelector('#deploy-instruction-result');
+                            resultEl.textContent = data.instruction;
+                            resultEl.classList.remove('hidden');
+                            bodyEl.querySelector('#deploy-instruction-copy-actions').classList.remove('hidden');
+                        } catch (e) {
+                            showToast(e.message || 'Не удалось сгенерировать инструкцию выливки');
+                        } finally {
+                            setButtonLoading(buttonEl, false);
+                        }
+                    });
+                    bodyEl.querySelector('[data-copy-result-btn]').addEventListener('click', async () => {
+                        await copyText(bodyEl.querySelector('#deploy-instruction-result').textContent);
+                        notifyCopied('инструкция выливки');
                     });
                 }
             );

@@ -42,7 +42,8 @@ Stop: `docker compose down`
   `delete_task.php`, `today_time_spent.php`, `get_time_spent.php`, `log_time_quick.php`,
   `log_time.php`, `update_story_points.php`, `transition_doing.php`,
   `transition_pull_request.php`, `generate_branch_name.php`, `generate_commit_message.php`,
-  `generate_pr_description.php`, `generate_motivation_quote.php`, `calc_earnings.php`
+  `generate_pr_description.php`, `generate_deploy_instruction.php`,
+  `generate_motivation_quote.php`, `calc_earnings.php`
 - `public/` — frontend (index.php, assets/css, assets/js)
 - `Dockerfile`, `docker-compose.yml` — containerized run (PHP 8.3 + pdo_sqlite)
 - `config/params.ini` — integrations config (Jira, LLM, GitHub, work day, salary), not in git
