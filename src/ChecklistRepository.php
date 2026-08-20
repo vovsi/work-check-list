@@ -32,6 +32,32 @@ final class ChecklistRepository
      */
     private const HIDE_IF_STORY_POINTS_ALREADY_SET_CODE = 'story_points';
 
+    /**
+     * Пункты, которые скрываются целиком (для всех задач), пока включён режим
+     * [mode].claude_code_skill_mode — эти шаги за разработчика делает скилл Claude Code,
+     * поэтому в чек-листе они лишние. Скрытые пункты не попадают в ответ ни одного эндпоинта,
+     * значит не показываются, не участвуют в прогрессе и в очерёдности шагов. Отметки в
+     * task_checklist при этом остаются в БД — выключение режима возвращает пункты вместе с
+     * уже проставленными галочками. Поэтому пункты и не удалены из Database::CHECKLIST_ITEMS:
+     * удаление оттуда стирает и сам пункт, и все галочки задач (Database::pruneRemovedItems),
+     * то есть было бы необратимым.
+     */
+    private const CLAUDE_CODE_SKILL_MODE_HIDDEN_CODES = [
+        'code_written',
+        'pull_request',
+        'claude_review',
+        'pr_description',
+    ];
+
+    /**
+     * Обратная сторона режима: пункты, которые существуют только при включённом
+     * [mode].claude_code_skill_mode, а при выключенном скрываются тем же фильтром — это шаги
+     * самого скилла, в обычном процессе их делать нечем.
+     */
+    private const CLAUDE_CODE_SKILL_MODE_ONLY_CODES = [
+        'skill_commit',
+    ];
+
     public function __construct(private readonly PDO $db)
     {
     }
@@ -58,19 +84,31 @@ final class ChecklistRepository
      */
     public function getStatusesForTask(int $taskId): array
     {
+        $params = [
+            'task_id' => $taskId,
+            'hidden_code' => self::HIDE_IF_STORY_POINTS_ALREADY_SET_CODE,
+        ];
+
+        $placeholders = [];
+        foreach ($this->hiddenCodes() as $index => $code) {
+            $placeholders[] = ':hidden_by_mode_' . $index;
+            $params['hidden_by_mode_' . $index] = $code;
+        }
+        // Скрывать нечего = условия быть не должно вовсе (NOT IN () — синтаксическая ошибка)
+        $modeFilter = $placeholders === []
+            ? ''
+            : ' AND c.code NOT IN (' . implode(', ', $placeholders) . ')';
+
         $stmt = $this->db->prepare(
             'SELECT c.id, c.code, c.title, tc.is_done
              FROM checklist c
              JOIN task_checklist tc ON tc.checklist_id = c.id
              JOIN tasks t ON t.id = tc.task_id
              WHERE tc.task_id = :task_id
-               AND NOT (c.code = :hidden_code AND t.story_points_set = 1)
+               AND NOT (c.code = :hidden_code AND t.story_points_set = 1)' . $modeFilter . '
              ORDER BY c.sort_order'
         );
-        $stmt->execute([
-            'task_id' => $taskId,
-            'hidden_code' => self::HIDE_IF_STORY_POINTS_ALREADY_SET_CODE,
-        ]);
+        $stmt->execute($params);
 
         return array_map(
             static fn (array $row): array => [
@@ -81,6 +119,19 @@ final class ChecklistRepository
             ],
             $stmt->fetchAll(PDO::FETCH_ASSOC)
         );
+    }
+
+    /**
+     * Пункты, скрытые в текущем режиме: включён Claude Code Skill — прячем шаги, которые
+     * делает скилл; выключен — прячем шаги самого скилла.
+     *
+     * @return list<string>
+     */
+    private function hiddenCodes(): array
+    {
+        return Config::claudeCodeSkillMode()
+            ? self::CLAUDE_CODE_SKILL_MODE_HIDDEN_CODES
+            : self::CLAUDE_CODE_SKILL_MODE_ONLY_CODES;
     }
 
     /**

@@ -217,3 +217,22 @@ quotes_url = "https://zenquotes.io/api/random"
 Optional — defaults shown above. `code` is looked up in the exchange rate response (`rates`),
 `label` is what the UI prints next to the amount. Services that need a token stay in their own
 sections (`[atlassian]`, `[llm]`).
+
+## Claude Code skill mode (hiding the steps the skill does for you)
+
+When a Claude Code skill already handles committing, opening the PR, reviewing it and writing
+the PR description, those checklist items are just noise. One switch hides them:
+
+```ini
+[mode]
+claude_code_skill_mode = "1"
+```
+
+`1` hides `code_written`, `pull_request`, `claude_review` and `pr_description` (list —
+`ChecklistRepository::CLAUDE_CODE_SKILL_MODE_HIDDEN_CODES`) together with the copy buttons that
+depend on the PR link they produce, and adds one step of its own right after "Create a git
+branch" — `skill_commit` ("Закоммитить изменения"), a modal that copies the skill's `/commit`
+command to the clipboard (list — `CLAUDE_CODE_SKILL_MODE_ONLY_CODES`, hidden when the mode is
+off). `0`, missing key or missing `config/params.ini` — full
+checklist. Nothing is deleted from the database: already ticked items come back exactly as they
+were when the mode is switched off.

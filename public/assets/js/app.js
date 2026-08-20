@@ -23,13 +23,23 @@
         return url ? ` См.: ${url}` : '';
     }
 
-    function buildDeployDetailsText(taskId, prLink) {
+    /** Команда скилла Claude Code, который делает коммит за разработчика (пункт `skill_commit`,
+     * виден только при включённом [mode].claude_code_skill_mode) */
+    const SKILL_COMMIT_COMMAND = '/commit';
+
+    /** Подсказка вместо ссылки на PR — когда пункт «Создать PR» жив, но ссылку он не сохранил */
+    const PR_LINK_MISSING_HINT = '[ссылка на PR не найдена — вставьте вручную]';
+
+    /** prLinkFallback — чем заменить ссылку на PR в «3. Вылить», если её нет: подсказкой выше
+     * либо пустой строкой, когда пункт «Создать PR» отключён и ссылки взяться негде */
+    function buildDeployDetailsText(taskId, prLink, prLinkFallback) {
         const configTarget = DEPLOY_CONFIG_PROJECT ? ` ${DEPLOY_CONFIG_PROJECT}` : '';
+        const deployTarget = prLink || prLinkFallback;
 
         return `Для выливки ${taskId} необходимо:\n` +
             '1. Запустить скрипты БД:\n```\n\n```\n' +
             `2. Добавить в конфиг${configTarget}:\n\`\`\`\n\n\`\`\`\n` +
-            '3. Вылить: ' + (prLink || '[ссылка на PR не найдена — вставьте вручную]');
+            '3. Вылить:' + (deployTarget ? ` ${deployTarget}` : '');
     }
 
     const JIRA_DESCRIPTION_HTML =
@@ -309,6 +319,7 @@
     const ITEM_OPENS_MODAL = new Set([
         'story_points',
         'git_branch',
+        'skill_commit',
         'code_written',
         'pull_request',
         'claude_review',
@@ -348,12 +359,14 @@
                 '.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 ' +
                 '.21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>',
         },
+        // Звезда Claude — лучи намеренно разной длины (как в логотипе), а не ровная восьмилучевая
         claude: {
             color: '#D97757',
             svg:
-                '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.4 3.6 1.2 6.1 2.4 7.4 1.3 1.3 3.8 ' +
-                '2.1 7.4 2.4-3.6.4-6.1 1.2-7.4 2.4-1.3 1.3-2.1 3.8-2.4 7.4-.4-3.6-1.2-6.1-2.4-7.4C8.3 12.9 5.8 ' +
-                '12.1 2.2 11.8 5.8 11.4 8.3 10.6 9.6 9.4 10.9 8.1 11.7 5.6 12 2z"/></svg>',
+                '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" ' +
+                'stroke-linecap="round"><path d="M12 2.6V21.4"/><path d="M3.1 12.6h17.8"/>' +
+                '<path d="M5.5 5.9 18.2 18.6"/><path d="M18.5 6.2 5.8 18.9"/>' +
+                '<path d="M8.1 3.9 15.4 20.3"/><path d="M20.6 8.6 3.7 15.9"/></svg>',
         },
         telegram: {
             color: '#26A5E4',
@@ -381,6 +394,7 @@
         story_points: 'jira',
         status_doing: 'jira',
         git_branch: 'git',
+        skill_commit: 'claude',
         code_written: 'php',
         pull_request: 'github',
         claude_review: 'claude',
@@ -434,6 +448,14 @@
 
     function prLinkStorageKey() {
         return `devflow_pr_link_${state.task.id}`;
+    }
+
+    /** Есть ли пункт с таким code в чек-листе текущей задачи. Единственный источник правды о
+     * составе чек-листа — ответ API (скрытые режимом [mode].claude_code_skill_mode пункты
+     * отфильтровывает ChecklistRepository), поэтому список скрытых пунктов на фронте не
+     * дублируется — зависимости между пунктами проверяются через эту функцию */
+    function hasChecklistItem(code) {
+        return state.checklist.some((entry) => entry.code === code);
     }
 
     /** Описание, введённое в пункте «Закоммитить код» — подставляется в поле пункта «Указать
@@ -1436,6 +1458,30 @@
             await markDone(item.id);
         },
 
+        // Закоммитить изменения — шаг режима Claude Code Skill: коммит делает сам скилл, от
+        // приложения нужна только его команда в буфере. Копирование можно повторять, отметка — «Готово»
+        skill_commit: async (item) => {
+            const confirmed = await showModal(
+                'Закоммитить изменения',
+                '<div class="modal-copy-actions">' +
+                    `<button type="button" class="btn btn-secondary" data-copy-btn>Скопировать ${escapeHtml(SKILL_COMMIT_COMMAND)}</button>` +
+                    '</div>',
+                [
+                    { label: 'Отмена', value: false },
+                    { label: 'Готово', primary: true, value: true },
+                ],
+                (bodyEl) => {
+                    bodyEl.querySelector('[data-copy-btn]').addEventListener('click', async () => {
+                        await copyText(SKILL_COMMIT_COMMAND);
+                        notifyCopied(`команда «${SKILL_COMMIT_COMMAND}»`);
+                    });
+                }
+            );
+            if (confirmed) {
+                await markDone(item.id);
+            }
+        },
+
         // Проверить PR через Claude — скопировать шаблон промпта со ссылкой на PR из шага «PR создан»,
         // отметка пункта выполненным отдельной кнопкой (копирование можно повторять, не завершая пункт)
         claude_review: async (item) => {
@@ -1560,7 +1606,10 @@
                 `<div class="snippet" style="font-family: inherit;">${JIRA_DESCRIPTION_HTML}</div>` +
                     '<div class="modal-copy-actions">' +
                     '<button type="button" class="btn btn-secondary" data-copy-btn>Скопировать</button>' +
-                    '<button type="button" class="btn btn-secondary" data-copy-pr-btn>Скопировать PR</button>' +
+                    // ссылку на PR сохраняет пункт «Создать PR» — пока он отключён, копировать нечего
+                    (hasChecklistItem('pull_request')
+                        ? '<button type="button" class="btn btn-secondary" data-copy-pr-btn>Скопировать PR</button>'
+                        : '') +
                     '</div>',
                 [
                     { label: 'Отмена', value: false },
@@ -1571,7 +1620,7 @@
                         await copyRichText(JIRA_DESCRIPTION_HTML, JIRA_DESCRIPTION_PLAIN);
                         notifyCopied('описание для Jira (с форматированием)');
                     });
-                    bodyEl.querySelector('[data-copy-pr-btn]').addEventListener('click', async () => {
+                    bodyEl.querySelector('[data-copy-pr-btn]')?.addEventListener('click', async () => {
                         await copyText(sessionStorage.getItem(prLinkStorageKey()) || '');
                         notifyCopied('ссылка на PR');
                     });
@@ -1643,11 +1692,19 @@
         // Отправить PR ревьюверу — модалка с двумя вариантами копирования, отметка только по «Готово»
         send_pr: async (item) => {
             const link = sessionStorage.getItem(prLinkStorageKey());
-            const detailsText = buildDeployDetailsText(state.task.task_id, link);
+            // Ссылку на PR сохраняет пункт «Создать PR» — пока он отключён, копировать нечего
+            const hasPrLink = hasChecklistItem('pull_request');
+            const detailsText = buildDeployDetailsText(
+                state.task.task_id,
+                link,
+                hasPrLink ? PR_LINK_MISSING_HINT : ''
+            );
             const confirmed = await showModal(
                 'Отправить PR ревьюверу',
                 '<div class="modal-copy-actions">' +
-                    '<button type="button" class="btn btn-secondary" data-copy-btn="link">Скопировать Link to PR</button>' +
+                    (hasPrLink
+                        ? '<button type="button" class="btn btn-secondary" data-copy-btn="link">Скопировать Link to PR</button>'
+                        : '') +
                     '<button type="button" class="btn btn-secondary" data-copy-btn="details">Скопировать Details template</button>' +
                     '</div>',
                 [
@@ -1655,7 +1712,8 @@
                     { label: 'Готово', primary: true, value: true },
                 ],
                 (bodyEl) => {
-                    bodyEl.querySelector('[data-copy-btn="link"]').addEventListener('click', async () => {
+                    const linkBtn = bodyEl.querySelector('[data-copy-btn="link"]');
+                    linkBtn?.addEventListener('click', async () => {
                         if (link) {
                             await copyText(link);
                             notifyCopied(`ссылка на PR «${link}»`);
