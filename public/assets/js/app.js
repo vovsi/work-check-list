@@ -270,6 +270,11 @@
     const linkError = document.getElementById('link-error');
     const recentTasksEl = document.getElementById('recent-tasks');
     const recentTasksListEl = document.getElementById('recent-tasks-list');
+    const dashboardEl = document.getElementById('dashboard');
+    const dashboardRefreshBtn = document.getElementById('dashboard-refresh');
+    const metricStalePrEl = document.getElementById('metric-stale-pr');
+    const metricStalePrValueEl = document.getElementById('metric-stale-pr-value');
+    const metricStalePrLabelEl = document.getElementById('metric-stale-pr-label');
     const taskIdLabel = document.getElementById('task-id-label');
     const changeTaskBtn = document.getElementById('change-task-btn');
     const checklistEl = document.getElementById('checklist');
@@ -2211,11 +2216,13 @@
         'Хорошо сделанная работа сама себе награда — а премия просто приятный бонус.',
     ];
 
-    /** Разметка списка сегодняшних задач с затреканным временем — общая для модалки
-     * иконки-задач и модалки поздравления (в поздравлении статус не выводим: там важен сам
-     * список задач, а места в окне 500×500 меньше) */
-    function todayTasksListHtml(tasks, options) {
+    /** Разметка списка задач со ссылками на Jira — общая для модалки задач за сегодня,
+     * модалки поздравления (там без статуса: важен сам список, а места в окне 500×500 меньше)
+     * и модалок показателей дашборда (там без времени — его в показателе нет).
+     * CSS-классы остались историческими (.today-task-*), разметка при этом общая. */
+    function taskListHtml(tasks, options) {
         const withStatus = !(options && options.withStatus === false);
+        const withTime = !(options && options.withTime === false);
         return '<div class="today-tasks-list">' +
             tasks
                 .map(
@@ -2226,7 +2233,7 @@
                         `<span class="today-task-id">${escapeHtml(task.task_id)}</span>` +
                         `<span class="today-task-title">${escapeHtml(task.title)}</span>` +
                         (withStatus ? `<span class="today-task-status">${escapeHtml(task.status || '')}</span>` : '') +
-                        `<span class="today-task-time">${escapeHtml(formatDuration(task.seconds))}</span>` +
+                        (withTime ? `<span class="today-task-time">${escapeHtml(formatDuration(task.seconds))}</span>` : '') +
                         '</a>'
                 )
                 .join('') +
@@ -2270,7 +2277,7 @@
         const tasksHtml = todayTasks.length
             ? '<div class="congrats-tasks">' +
                 `<p class="congrats-tasks-title">Задачи за сегодня: ${todayTasks.length} · ${escapeHtml(formatDuration(tasksSeconds))}</p>` +
-                todayTasksListHtml(todayTasks, { withStatus: false }) +
+                taskListHtml(todayTasks, { withStatus: false }) +
                 '</div>'
             : '';
 
@@ -2326,7 +2333,7 @@
         const bodyHtml = '<div class="today-tasks-modal">' +
             (tasks.length === 0
                 ? '<p class="today-tasks-empty">Сегодня время ещё не затрекано.</p>'
-                : todayTasksListHtml(tasks)) +
+                : taskListHtml(tasks)) +
             '</div>';
 
         const title = tasks.length === 0 ? 'Задачи за сегодня 🍯' : `Задачи за сегодня (${tasks.length}) 🍯`;
@@ -2356,10 +2363,85 @@
         todayTimeEl.dataset.tooltip = `Затрекано времени (обновлено ${formatAgo(todayTimeLoadedAt)})`;
     });
 
+    // ==================== Дашборд показателей (экран ввода ссылки) ====================
+
+    /** Последний полученный показатель «зависшие PR» — из него берётся список задач для
+     * модалки по клику, чтобы не дёргать Jira второй раз за теми же данными */
+    let stalePrMetric = null;
+    let dashboardLoadedAt = 0;
+    let dashboardLoading = false;
+
+    function applyDashboard(data) {
+        dashboardLoadedAt = Date.now();
+        stalePrMetric = data.stale_pull_requests || null;
+        if (!stalePrMetric) return;
+
+        metricStalePrValueEl.textContent = String(stalePrMetric.count || 0);
+        // Порог и название статуса приходят с сервера (DashboardService, [atlassian] в конфиге) —
+        // на фронте их не зашиваем
+        metricStalePrLabelEl.textContent = `Зависшие PR > ${stalePrMetric.hours} ч`;
+        metricStalePrEl.dataset.tooltip =
+            `Задачи в статусе «${stalePrMetric.status}» дольше ${stalePrMetric.hours} ч`;
+    }
+
+    /**
+     * Подтягивает показатели дашборда. Как и индикатор затреканного времени, ничего не
+     * блокирует и при ошибке (нет интеграции с Jira, недоступна сеть) просто скрывает блок —
+     * показывать в нём тогда нечего.
+     */
+    async function loadDashboard() {
+        if (dashboardLoading) return;
+        dashboardLoading = true;
+        dashboardEl.classList.remove('hidden');
+        setButtonLoading(dashboardRefreshBtn, true);
+        // Спиннер в слоте значения — только на первой загрузке: при актуализации значение уже
+        // есть, и крутится спиннер на самой кнопке обновления
+        if (!metricStalePrValueEl.textContent) {
+            metricStalePrValueEl.innerHTML = spinnerHtml();
+        }
+        try {
+            applyDashboard(await apiCall('../api/dashboard.php', {}));
+        } catch (e) {
+            dashboardEl.classList.add('hidden');
+            metricStalePrValueEl.textContent = '';
+        } finally {
+            setButtonLoading(dashboardRefreshBtn, false);
+            dashboardLoading = false;
+        }
+    }
+
+    dashboardRefreshBtn.addEventListener('click', () => loadDashboard());
+
+    // Давность обновления пересчитывается в момент наведения — как у индикатора времени
+    dashboardRefreshBtn.addEventListener('mouseenter', () => {
+        dashboardRefreshBtn.dataset.tooltip = dashboardLoadedAt === 0
+            ? 'Обновить показатели'
+            : `Обновить показатели (обновлено ${formatAgo(dashboardLoadedAt)})`;
+    });
+
+    // Клик по показателю — список задач за числом, каждая строка ведёт на задачу в Jira
+    metricStalePrEl.addEventListener('click', async () => {
+        const tasks = (stalePrMetric && stalePrMetric.tasks) || [];
+        const hours = (stalePrMetric && stalePrMetric.hours) || 0;
+        const status = (stalePrMetric && stalePrMetric.status) || '';
+
+        const bodyHtml = '<div class="today-tasks-modal">' +
+            (tasks.length === 0
+                ? `<p class="today-tasks-empty">Нет задач, зависших в статусе «${escapeHtml(status)}» дольше ${hours} ч.</p>`
+                : taskListHtml(tasks, { withStatus: false, withTime: false })) +
+            '</div>';
+
+        const title = tasks.length === 0
+            ? 'Зависшие PR ⏳'
+            : `Зависшие PR: ${tasks.length} ⏳`;
+        await showModal(title, bodyHtml, [{ label: 'Закрыть', primary: true }]);
+    });
+
     // ==================== Инициализация ====================
 
     initTheme();
     loadTodayTimeSpent();
+    loadDashboard();
 
     const savedLink = localStorage.getItem(TASK_LINK_STORAGE_KEY);
     if (savedLink) {

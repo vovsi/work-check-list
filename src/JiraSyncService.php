@@ -98,6 +98,16 @@ final class JiraSyncService
         return $this->client->fetchTodayTimeSpentBreakdown($ensureTaskId);
     }
 
+    /**
+     * Задачи, зависшие в статусе дольше $hours часов (метрика дашборда).
+     *
+     * @return list<array{task_id: string, title: string, status: string, link: string}>
+     */
+    public function getIssuesStuckInStatus(string $statusName, int $hours): array
+    {
+        return $this->client->fetchIssuesStuckInStatus($statusName, $hours);
+    }
+
     public function addWorklog(array $task, int $seconds): void
     {
         $this->client->addWorklog($task['task_id'], $seconds);

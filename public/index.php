@@ -99,6 +99,24 @@ $assetVersion = static function (string $relativePath): string {
     <section id="link-screen" class="screen link-screen">
         <div class="card link-card">
             <h1 class="app-title">DevFlow 🐝</h1>
+
+            <!-- Дашборд показателей по Jira (api/dashboard.php). Клик по показателю открывает
+                 список задач за числом, кнопка справа — актуализация данных -->
+            <div id="dashboard" class="dashboard hidden">
+                <div class="dashboard-metrics">
+                    <button type="button" id="metric-stale-pr" class="metric metric--blue">
+                        <span class="metric-value" id="metric-stale-pr-value"></span>
+                        <span class="metric-label" id="metric-stale-pr-label">Зависшие PR</span>
+                    </button>
+                </div>
+                <button type="button" id="dashboard-refresh" class="dashboard-refresh" aria-label="Обновить показатели">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 11a8 8 0 1 0-2.3 5.7"/>
+                        <path d="M20 5v6h-6"/>
+                    </svg>
+                </button>
+            </div>
+
             <div class="link-input-row">
                 <input
                     type="text"

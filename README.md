@@ -90,6 +90,12 @@ Independently of the checklist you also get: a "time logged today" indicator, qu
 with a single slider, a list of today's tasks, and a git commands dropdown next to the branch
 name (`checkout -b`, `push`, `rebase` onto your base branches).
 
+The link screen also shows a small dashboard above the input field. For now it holds a single
+metric — "Зависшие PR > 24 ч" ("stuck PRs > 24 h"): how many of your Jira tasks have been sitting
+in the Pull request status (the one from `pull_request_status` in your config) for longer than
+24 hours. Click the tile to get the list of those tasks — each row links to Jira. The round
+button on the right refreshes the numbers; hover it to see how long ago they were fetched.
+
 ## What you need to install
 
 The minimum to get the app open:
@@ -460,6 +466,7 @@ ticks exactly as they were.
 | The database | `ls -la storage/app.sqlite` | The file appeared after the first open |
 | Jira | Paste a link to a real task | The task key shows up on top, the checklist renders; the "time logged today" indicator appears in the top left |
 | Jira (token) | `curl -s -u "email:token" "https://your-domain.atlassian.net/rest/api/2/myself"` | JSON with your account, not a `401` |
+| The dashboard | Look above the "task link" field | The blue "Зависшие PR > 24 ч" tile with a number; clicking it opens the task list |
 | The LLM | Reach "Создать ветку в Git" → "Сгенерировать" | A branch name lands in the field |
 | GitHub CLI | `gh auth status` | `Logged in to github.com` |
 
@@ -469,7 +476,7 @@ PHP logs when running under Docker: `docker compose logs -f app`.
 
 | Not configured | What stops working | What keeps working |
 |---|---|---|
-| `[atlassian]` | Task title from Jira, Story Points, status transitions, time logging, the time indicator | The whole checklist as a manual tracker, branches, copying texts |
+| `[atlassian]` | Task title from Jira, Story Points, status transitions, time logging, the time indicator, the dashboard on the link screen | The whole checklist as a manual tracker, branches, copying texts |
 | `[llm]` | The "Сгенерировать" ("Generate") buttons (branch, commit message, PR description); the quote stays in English | Everything else; you can type the texts by hand |
 | `[github]` | Reviewers in the `gh pr create` command | The command itself is still copied |
 | `[git]`, `[templates]`, `[docs]` | The `Rebase …` entries, project names and documentation links inside the copied texts | The texts are copied without those pieces |
@@ -493,6 +500,7 @@ PHP logs when running under Docker: `docker compose logs -f app`.
 | LLM: `404` from LM Studio | The Developer tab's server isn't *Running*, or LM Studio is older than 0.4 (no `/api/v1/chat`) |
 | Claude: `credit balance is too low` | Empty balance at platform.claude.com → Billing |
 | Code changes don't show up | Aggressive browser caching. Static assets are versioned by mtime automatically; under Docker run `docker compose restart` after editing |
+| The dashboard above the input field is missing | `[atlassian]` isn't configured or Jira is unreachable — there is nothing to count, so the block hides itself. Check the `myself` call above |
 | Time you just logged isn't in the list | The Jira Cloud search index updates with a delay — the app re-fetches the open task directly, the rest show up within a few seconds |
 
 ## Project structure

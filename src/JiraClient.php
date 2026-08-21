@@ -261,13 +261,69 @@ final class JiraClient
                     'task_id' => $key,
                     'title' => (string) ($issue['fields']['summary'] ?? ''),
                     'status' => (string) ($issue['fields']['status']['name'] ?? ''),
-                    'link' => rtrim($this->baseUrl, '/') . '/browse/' . $key,
+                    'link' => $this->issueLink($key),
                     'seconds' => $seconds,
                 ];
             }
         }
 
         return $result;
+    }
+
+    /**
+     * Задачи, «зависшие» в статусе: сейчас находятся в нём и попали в него раньше, чем
+     * $hours часов назад. Считаем только свои (assignee = currentUser()) — приложение
+     * персональное, как и остальные обращения к Jira здесь.
+     *
+     * Момент попадания в статус берём из истории изменений (status CHANGED TO ... BEFORE),
+     * а не из полей updated/statuscategorychangedate: updated меняет любой комментарий,
+     * а категория статуса у Doing и Pull request одна и та же, и её дата не обновляется.
+     * Задача, успевшая выйти из статуса и вернуться в него за последние $hours часов,
+     * в выборку тоже попадёт — точность здесь не стоит запроса changelog по каждой задаче.
+     *
+     * @return list<array{task_id: string, title: string, status: string, link: string}>
+     */
+    public function fetchIssuesStuckInStatus(string $statusName, int $hours): array
+    {
+        $status = str_replace('"', '\\"', $statusName);
+        $jql = sprintf(
+            'assignee = currentUser() AND status = "%s" AND status CHANGED TO "%s" BEFORE "-%dh" ORDER BY updated ASC',
+            $status,
+            $status,
+            $hours
+        );
+
+        // Тот же /search/jql, что и у сегодняшних ворклогов (старый /search на Jira Cloud
+        // отвечает HTTP 410). Зависших задач у одного человека заведомо меньше 100 —
+        // пагинация не нужна.
+        $search = $this->request(
+            'GET',
+            '/rest/api/2/search/jql?jql=' . rawurlencode($jql) . '&fields=key,summary,status&maxResults=100',
+            null,
+            "при поиске задач, зависших в статусе «{$statusName}»"
+        );
+
+        $result = [];
+        foreach (($search['issues'] ?? []) as $issue) {
+            $key = (string) ($issue['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+            $result[] = [
+                'task_id' => $key,
+                'title' => (string) ($issue['fields']['summary'] ?? ''),
+                'status' => (string) ($issue['fields']['status']['name'] ?? ''),
+                'link' => $this->issueLink($key),
+            ];
+        }
+
+        return $result;
+    }
+
+    /** Ссылка на задачу в веб-интерфейсе Jira (base_url из конфига + /browse/КЛЮЧ) */
+    private function issueLink(string $key): string
+    {
+        return rtrim($this->baseUrl, '/') . '/browse/' . $key;
     }
 
     /** Добавляет worklog (доп. время сверх уже затреканного) к задаче */
