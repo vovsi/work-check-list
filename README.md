@@ -1,173 +1,389 @@
-# DevFlow
+<div align="center">
 
-Single-page checklist app for working with Jira tasks. PHP 8.3 + SQLite, no frameworks.
+# 🧭 DevFlow
 
-## Run locally (PHP)
+### Персональный чек-лист рутины по задаче Jira
+
+Вставил ссылку на задачу — приложение провело по всем шагам разработки:
+Story Points → ветка → коммит → PR → ревью → Jira → трек времени → отправка PR ревьюверу.
+Каждый шаг сам делает сопутствующее действие: копирует команду, генерирует имя ветки и
+описание PR нейронкой, переводит статус в Jira, трекает время.
+
+![PHP](https://img.shields.io/badge/PHP-8.3-777BB4?logo=php&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-локальный%20файл-003B57?logo=sqlite&logoColor=white)
+![Vanilla JS](https://img.shields.io/badge/Frontend-vanilla%20JS-F7DF1E?logo=javascript&logoColor=black)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)
+![Dependencies](https://img.shields.io/badge/зависимостей-0-success)
+
+<table>
+<tr>
+<td><img src="docs/screenshot-light.png" alt="DevFlow — чек-лист задачи, светлая тема" width="380"></td>
+<td><img src="docs/screenshot-dark.png" alt="DevFlow — чек-лист задачи, тёмная тема" width="380"></td>
+</tr>
+</table>
+
+<sub>Приложение рассчитано на маленькое окно браузера <b>500×500</b> — держите его сбоку от IDE.</sub>
+
+</div>
+
+---
+
+## Содержание
+
+- [Что это и как работает](#что-это-и-как-работает)
+- [Шаги чек-листа](#шаги-чек-листа)
+- [Что нужно установить](#что-нужно-установить)
+- [Быстрый старт за 5 минут](#быстрый-старт-за-5-минут)
+- [Открыть в отдельном окне 500×500](#открыть-в-отдельном-окне-500500)
+- [Конфигурация: `config/params.ini`](#конфигурация-configparamsini)
+  - [1. Jira — `[atlassian]`](#1-jira--atlassian)
+  - [2. Нейронка — `[llm]`](#2-нейронка--llm)
+    - [Вариант А: Claude по API](#вариант-а-claude-по-api-проще)
+    - [Вариант Б: LM Studio (локально, бесплатно)](#вариант-б-lm-studio-локально-бесплатно)
+  - [3. GitHub CLI — `[github]`](#3-github-cli--github)
+  - [4. Git-команды — `[git]`](#4-git-команды--git)
+  - [5. Тексты команды — `[templates]` и `[docs]`](#5-тексты-команды--templates-и-docs)
+  - [6. Рабочий день — `[worktime]`](#6-рабочий-день--worktime)
+  - [7. Заработок — `[salary]`, `[currency]`, `[services]`](#7-заработок--salary-currency-services)
+  - [8. Режим скилла Claude Code — `[mode]`](#8-режим-скилла-claude-code--mode)
+- [Проверка, что всё поднялось](#проверка-что-всё-поднялось)
+- [Что можно не настраивать](#что-можно-не-настраивать)
+- [Траблшутинг](#траблшутинг)
+- [Структура проекта](#структура-проекта)
+- [Обновление и остановка](#обновление-и-остановка)
+
+---
+
+## Что это и как работает
+
+Одностраничное приложение без фреймворков: PHP 8.3 + SQLite-файл, фронтенд — один `app.js`.
+Ни Composer, ни npm, ни сборки, ни авторизации — это персональный инструмент на одного
+человека, БД лежит рядом файлом.
+
+1. Вставляете ссылку на задачу Jira (`https://your-domain.atlassian.net/browse/PROJ-123`).
+2. Приложение проверяет, что задача существует, подтягивает её заголовок и описание из Jira
+   и создаёт (или находит) чек-лист в своей БД.
+3. Дальше идёте по пунктам сверху вниз: доступен всегда только первый невыполненный.
+   Выполненный пункт уезжает из списка, прогресс-бар растёт.
+4. Повторное открытие той же задачи **не сбрасывает** отметки — только обновляет данные из
+   Jira. Сбросить чек-лист можно кнопкой «Начать заново», удалить задачу — из списка последних
+   задач на экране ввода ссылки.
+
+## Шаги чек-листа
+
+| Шаг | Что делает приложение | Нужна интеграция |
+|---|---|---|
+| Указать Story Points | Модалка с выбором 1/2/3/5/8/13 → проставляет поле в Jira. Пункт скрыт, если Story Points в задаче уже стоят | Jira |
+| Перевести в статус Doing | Переводит задачу в Jira в статус из конфига | Jira |
+| Создать ветку в Git | Генерирует имя ветки нейронкой по заголовку задачи, копирует в буфер, сохраняет в БД | Нейронка (опц.) |
+| Закоммитить код | Поле «что сделали» → нейронка собирает первую строку commit message по Conventional Commits с ключом задачи | Нейронка |
+| Создать PR | Отдаёт готовую команду `gh pr create --draft` с вашими ревьюверами, спрашивает ссылку на созданный PR | GitHub CLI |
+| Проверить PR Claude Code | Копирует готовый промпт ревью со ссылкой на PR и ссылками на вашу внутреннюю документацию | — |
+| Указать описание PR | Нейронка заполняет шаблон описания PR команды + опциональный блок инструкции выливки | Нейронка |
+| PR`s переведены в Ready for review | Просто отметка | — |
+| Оставить описание в Jira | Копирует форматированный текст для комментария в Jira | — |
+| Перевести задачу в Pull Request | Переводит задачу в Jira в статус из конфига | Jira |
+| Затрекать время | Ползунок на весь рабочий день (с вычетом обеда) → добавляет worklog в Jira. При достижении дневной нормы — модалка поздравления с заработком за день и мотивационной цитатой | Jira |
+| Отправить PR ревьюверу | Копирует ссылку на PR и шаблон сообщения с инструкцией выливки | — |
+
+Плюс независимо от чек-листа: индикатор затреканного за сегодня времени, быстрый трек времени
+одним ползунком, список сегодняшних задач, дропдаун git-команд у названия ветки
+(`checkout -b`, `push`, `rebase` на ваши базовые ветки).
+
+## Что нужно установить
+
+Минимум, чтобы приложение открылось:
+
+- **либо** Docker Desktop (рекомендуется — ничего больше ставить не нужно),
+- **либо** PHP 8.3+ с расширением `pdo_sqlite` (`php -m | grep pdo_sqlite`).
+
+Для отдельных функций дополнительно:
+
+| Хочу | Нужно |
+|---|---|
+| Заголовок задачи из Jira, статусы, Story Points, трек времени | Аккаунт Atlassian + API-токен → [`[atlassian]`](#1-jira--atlassian) |
+| Генерацию имени ветки / commit message / описания PR | Ключ Claude API **или** LM Studio на своей машине → [`[llm]`](#2-нейронка--llm) |
+| Рабочую команду создания PR | GitHub CLI (`gh`) → [`[github]`](#3-github-cli--github) |
+
+Ничего из этого не обязательно: без Jira и нейронки чек-лист всё равно работает — просто
+соответствующие шаги не делают внешних действий (см. [«Что можно не настраивать»](#что-можно-не-настраивать)).
+
+## Быстрый старт за 5 минут
 
 ```bash
-php -S localhost:8000
+git clone <адрес-репозитория> dev-flow
+cd dev-flow
+cp config/params.ini.example config/params.ini
 ```
 
-Open in browser: http://localhost:8000/public/index.php
+Откройте `config/params.ini` и **обязательно отредактируйте либо удалите** секции с чужими
+значениями-заглушками (`your-domain.atlassian.net`, `sk-ant-...`, `your-github-nickname`) —
+с заглушками приложение запустится, но Jira будет отвечать ошибкой авторизации. Как заполнить
+каждую секцию — в разделе [«Конфигурация»](#конфигурация-configparamsini). Можно начать вообще
+с пустого файла и добавлять секции по мере надобности.
 
-It's recommended to open it in a small standalone Chrome window (Create Shortcut / App mode).
-
-## Run with Docker
+Запуск в Docker:
 
 ```bash
 docker compose up -d --build
 ```
 
-Open in browser: http://localhost:8000/public/index.php
+Или без Docker, локальным PHP (из корня проекта — важно, документ-рут именно корень, а не
+`public/`):
 
-The whole project is mounted into the container as a volume, so code changes on the host are picked up immediately — after editing a file, just run `docker compose restart` (no rebuild needed). A rebuild (`docker compose up -d --build`) is only required after changing the `Dockerfile` itself (e.g. adding a PHP extension).
+```bash
+php -S localhost:8000
+```
 
-Stop: `docker compose down`
+Открывайте: **http://localhost:8000/public/index.php**
 
-## Structure
+Файл БД (`storage/app.sqlite`) создастся сам при первом открытии, схема и список пунктов
+чек-листа применятся автоматически — никаких миграций руками запускать не нужно.
 
-- `database/schema.sql` — SQLite schema (tasks, checklist, task_checklist)
-- `storage/` — created automatically: `app.sqlite` (DB file) and `exchange_rate_cache.json`
-  (USD→target currency rate cache, 6h TTL, used by the earnings calculation)
-- `src/` — classes: `Database` (connection + migrations + checklist seeding), `Config`
-  (reads/validates `config/params.ini`), `TaskRepository`, `ChecklistRepository`, `TaskService`
-  (find-or-create task + checklist orchestration), `JiraClient` (Jira REST API v2 client),
-  `JiraSyncService` (sync, status transitions, worklogs), `LlmClient` (transport client to a
-  local LLM server), `AnthropicLlmClient` (transport client to Claude), `LlmClientFactory`
-  (picks one of the two by config), `BranchNameService`, `CommitMessageService`,
-  `DeployInstructionService`, `MotivationQuoteService` (all four generate text through
-  `LlmClientInterface`), `EarningsService`
-  (earnings for time worked), `ExchangeRateClient` (USD→target currency rate with file cache)
-- `api/` — JSON endpoints: `task.php`, `state.php`, `toggle.php`, `finish.php`,
-  `delete_task.php`, `today_time_spent.php`, `get_time_spent.php`, `log_time_quick.php`,
-  `log_time.php`, `update_story_points.php`, `transition_doing.php`,
-  `transition_pull_request.php`, `generate_branch_name.php`, `generate_commit_message.php`,
-  `generate_pr_description.php`, `generate_deploy_instruction.php`,
-  `generate_motivation_quote.php`, `calc_earnings.php`
-- `public/` — frontend (index.php, assets/css, assets/js)
-- `Dockerfile`, `docker-compose.yml` — containerized run (PHP 8.3 + pdo_sqlite)
-- `config/params.ini` — integrations config (Jira, LLM, GitHub, work day, salary), not in git
-  (see below)
+## Открыть в отдельном окне 500×500
 
-See `CLAUDE.md` in this repo for the full architecture, business rules and per-endpoint
-description.
+Приложение спроектировано под маленькое окно, которое всегда висит рядом с IDE. В Chrome:
 
-## LLM config (branch name / commit message / PR description / motivation quote)
+1. Откройте http://localhost:8000/public/index.php
+2. Меню ⋮ → **Cast, save and share** → **Install page as app** (в старых версиях:
+   *More tools → Create shortcut* → галочка *Open as window*).
+3. Получится отдельное окно без адресной строки — уменьшите его примерно до 500×500 и оставьте
+   сбоку.
 
-Four checklist/modal features generate text with an LLM: the "Создать ветку в Git" item
-(branch name suggestion), the "Закоммитить код" item (commit message subject line), the
-"Указать описание PR" item (PR description filled into the team template, plus the optional
-deploy instruction block appended to it), and the "reached daily hours" congrats modal
-(motivation quote). All four share the same `[llm]` config and go through
-`LlmClientInterface`, so they don't care which provider is configured.
+## Конфигурация: `config/params.ini`
 
-Two providers are supported, selected by `provider`: **Claude** over the Anthropic API
-(`AnthropicLlmClient`), or **LM Studio** (and compatible servers) exposing
-`POST <host>/api/v1/chat` with `{model, system_prompt, input}` (`LlmClient`). Settings for both
-live side by side — switching is a one-line change, nothing needs to be deleted.
-
-Copy the example config and fill in the provider you want:
+Единственный файл настроек. В git не попадает (см. `.gitignore`) — в нём ваши токены и адреса.
+Шаблон со всеми ключами и комментариями — `config/params.ini.example`.
 
 ```bash
 cp config/params.ini.example config/params.ini
 ```
 
-```ini
-[llm]
-provider = "anthropic"
-anthropic_api_key = "sk-ant-..."
-anthropic_model = "claude-haiku-4-5"
-lmstudio_host = "http://host.docker.internal:1234"
-lmstudio_model = "deepseek-coder-v2-lite-instruct"
-```
+Формат — обычный INI: секции в квадратных скобках, значения в двойных кавычках.
+**Все секции необязательны** — ненастроенная интеграция просто отключает свои функции, а не
+роняет приложение. После правки файла в Docker перезапуск не нужен (конфиг читается на каждый
+запрос), но если что-то не подхватилось — `docker compose restart`.
 
-- `provider = "anthropic"` — needs `anthropic_api_key` (create one at
-  [platform.claude.com](https://platform.claude.com)). `anthropic_model` is optional and
-  defaults to `claude-haiku-4-5` — the cheapest and fastest model, which is plenty for outputs
-  this short. No Composer dependency: the API is called over plain cURL.
-- `provider = "lmstudio"` — needs `lmstudio_host` and `lmstudio_model`. Since the app runs in Docker,
-  `localhost` inside the container points at the container itself — use `host.docker.internal`
-  (or your host machine's LAN IP) to reach an LLM server running on the host. If you run the app
-  without Docker (`php -S localhost:8000`), plain `localhost` works.
+---
 
-`provider` is optional and defaults to `"lmstudio"`. `config/params.ini` is gitignored (the API key
-and local addresses are yours). If the selected provider isn't configured, the four LLM
-endpoints respond with an error — the rest of the app still works.
+### 1. Jira — `[atlassian]`
 
-## Jira config (auto-fetch task title/description, status transitions, Story Points, time tracking)
-
-Opening a task fetches its title/description from Jira once and stores them in the DB — the
-sync icon (top-left, next to the checklist) re-fetches on demand. The same integration also
-powers the "Указать Story Points", "Перевести в статус Doing", "Перевести задачу в Pull
-Request" and "Затрекать время" checklist items.
-
-Add credentials to `config/params.ini`:
+Даёт: заголовок и описание задачи, проверку что задача существует, Story Points, переводы
+статусов, трек времени, индикатор «затрекано сегодня», список сегодняшних задач.
 
 ```ini
 [atlassian]
 base_url = "https://your-domain.atlassian.net"
 email = "you@example.com"
-api_token = "your-api-token"
+api_token = "ATATT3xFfGF0..."
 story_points_field = "customfield_10016"
 doing_status = "Doing"
 pull_request_status = "Pull request"
 ```
 
-Generate an API token at https://id.atlassian.com/manage-profile/security/api-tokens.
-`story_points_field`/`doing_status`/`pull_request_status` are optional — shown above are their
-defaults. Without this section the app still works — tasks just open without a synced
-title/description, and the Jira-backed checklist items are skipped.
+**Где взять `api_token`** (это не пароль от аккаунта — пароль не подойдёт):
 
-## GitHub CLI (PR creation)
+1. Зайдите на **https://id.atlassian.com/manage-profile/security/api-tokens** под своим
+   аккаунтом Atlassian.
+2. **Create API token** → введите любое имя (например `devflow`) → **Create**.
+3. Скопируйте токен сразу — второй раз его не покажут. Вставьте в `api_token`.
 
-The "Создать PR" checklist item copies a `gh pr create ...` command (with reviewers from
-`config/params.ini`, section `[github]`, key `reviewers`). Running that command requires the
-GitHub CLI installed and authenticated on your machine:
+**`base_url`** — адрес вашей Jira без пути: откройте любую задачу, в адресе будет
+`https://ЧТО-ТО.atlassian.net/browse/PROJ-123` → в конфиг идёт `https://ЧТО-ТО.atlassian.net`.
+
+**`email`** — почта того самого аккаунта Atlassian, на который выпущен токен (они работают
+только в паре, Basic Auth).
+
+**`story_points_field`** — ID кастомного поля Story Points, у разных Jira он разный.
+По умолчанию `customfield_10016` (подходит большинству Jira Cloud). Проверить свой:
+
+```bash
+curl -s -u "you@example.com:ВАШ_ТОКЕН" "https://your-domain.atlassian.net/rest/api/2/field" | grep -i "story point"
+```
+
+В ответе будет что-то вида `"id":"customfield_10016","name":"Story Points"` — берите `id`.
+
+**`doing_status` / `pull_request_status`** — названия переходов в вашем workflow, должны
+совпадать буква-в-букву (регистр не важен, но пробелы и слова — важны). Посмотреть, какие
+переходы реально доступны для задачи:
+
+```bash
+curl -s -u "you@example.com:ВАШ_ТОКЕН" \
+  "https://your-domain.atlassian.net/rest/api/2/issue/PROJ-123/transitions" | python3 -m json.tool
+```
+
+Берите значения `transitions[].name` (или `.to.name`). По умолчанию — `Doing` и `Pull request`.
+
+> Без секции `[atlassian]` приложение работает: задачи открываются без заголовка из Jira,
+> а Jira-шаги чек-листа просто отмечаются без внешнего действия.
+
+---
+
+### 2. Нейронка — `[llm]`
+
+Даёт: генерацию имени git-ветки, первой строки commit message, описания PR по шаблону
+команды, блока инструкции выливки и перевод мотивационной цитаты.
+
+Поддерживаются два провайдера, переключаются **одной строкой** `provider` — настройки обоих
+лежат в секции одновременно, удалять ничего не нужно:
+
+```ini
+[llm]
+provider = "anthropic"          ; "anthropic" или "lmstudio" (по умолчанию "lmstudio")
+
+; --- провайдер anthropic ---
+anthropic_api_key = "sk-ant-api03-..."
+anthropic_model = "claude-haiku-4-5"
+
+; --- провайдер lmstudio ---
+lmstudio_host = "http://host.docker.internal:1234"
+lmstudio_model = "qwen3.5-4b"
+```
+
+#### Вариант А: Claude по API (проще)
+
+1. Зарегистрируйтесь на **https://platform.claude.com**.
+2. **Settings → API keys → Create key**, скопируйте ключ (`sk-ant-api03-...`) — показывается
+   один раз.
+3. Пополните баланс в **Billing** (без баланса API отвечает ошибкой `credit balance is too low`).
+4. В конфиг: `provider = "anthropic"`, `anthropic_api_key = "<ключ>"`.
+
+`anthropic_model` можно не указывать — по умолчанию `claude-haiku-4-5`, самая дешёвая и
+быстрая модель. Все тексты здесь короткие (строка ветки, строка коммита, описание PR), так что
+расход на реальной работе — центы в месяц. SDK не нужен: запрос уходит обычным cURL.
+
+#### Вариант Б: LM Studio (локально, бесплатно)
+
+Полностью локальная нейронка на вашей машине — ни ключей, ни оплаты, ни утечки описаний задач
+наружу. Приложение обращается к ней по протоколу `POST <host>/api/v1/chat` с телом
+`{model, system_prompt, input}` — это встроенный REST API LM Studio, поэтому **нужен
+LM Studio версии 0.4 или новее** (проверено на 0.4.21).
+
+**Шаг 1. Установите LM Studio** — https://lmstudio.ai (macOS / Windows / Linux, бесплатно).
+
+**Шаг 2. Скачайте модель.** Вкладка 🔍 **Discover** → поиск по названию → **Download**.
+Задачи здесь простые (одна строка коммита, короткое описание), поэтому маленькой модели
+хватает с запасом:
+
+| Модель | Размер на диске | Кому |
+|---|---|---|
+| **Qwen3.5 4B** (`qwen3.5-4b`, квантование Q4_K_M / Q4_K_S) | ~2.5 ГБ | **рекомендуется**: быстрая, помещается в 8 ГБ RAM, хорошо держит русский и формат ответа |
+| **Gemma 3 4B** (`google/gemma-3-4b`) | ~2.5 ГБ | альтернатива, если Qwen капризничает с форматом |
+| **DeepSeek Coder V2 Lite Instruct** (`deepseek-coder-v2-lite-instruct`, Q4) | ~9 ГБ | если есть 16+ ГБ RAM и хочется более «программистских» формулировок |
+
+Не берите модели крупнее 7–8B: выигрыш в качестве для двух строк текста незаметен, а ждать
+генерацию будете секунды вместо мгновенного ответа.
+
+**Шаг 3. Параметры загрузки модели** (панель загрузки, она же ⚙️ у модели):
+
+| Параметр | Значение | Почему |
+|---|---|---|
+| Context Length | `4096` (можно `8192`) | описание PR — самый длинный ответ, 4k хватает; больше контекста = больше памяти |
+| GPU Offload | максимум (все слои) | на Apple Silicon и дискретной видеокарте ускоряет в разы |
+| Flash Attention | вкл. | меньше памяти, быстрее |
+| Temperature | оставьте по умолчанию (~0.7) | форматом ответа управляют системные промпты приложения |
+| Keep model in memory | вкл. | иначе первая генерация после паузы ждёт загрузку модели с диска |
+
+**Шаг 4. Поднимите сервер.** Вкладка **Developer** (иконка `>_`) → переключатель **Status:
+Running**. Порт по умолчанию — `1234`. Там же включите:
+
+- **Just-in-Time model loading** — модель подгрузится сама на первый запрос;
+- **Serve on Local Network** — **обязательно, если приложение запущено в Docker**: иначе сервер
+  слушает только `localhost` самой машины, и контейнер до него не дотянется.
+
+**Шаг 5. Пропишите адрес и модель:**
+
+- запуск в **Docker** → `lmstudio_host = "http://host.docker.internal:1234"`
+  (`localhost` изнутри контейнера — это сам контейнер, а не ваша машина);
+- запуск через `php -S` → `lmstudio_host = "http://localhost:1234"`;
+- `lmstudio_model` — **точный** id модели, как его отдаёт сервер (не название файла).
+  Посмотреть список:
+
+```bash
+curl -s http://localhost:1234/v1/models
+```
+
+**Шаг 6. Проверьте, что нейронка отвечает** тем же запросом, что делает приложение:
+
+```bash
+curl -s http://localhost:1234/api/v1/chat -H 'Content-Type: application/json' -d '{"model":"qwen3.5-4b","system_prompt":"Отвечай одним словом","input":"Привет"}'
+```
+
+Ожидаемый ответ — JSON с `output[0].content`. Если пришёл `404` — проверьте, что сервер во
+вкладке Developer в состоянии *Running* и что LM Studio не старее 0.4. Если
+`Connection refused` из контейнера — не включён *Serve on Local Network*.
+
+> Без настроенной секции `[llm]` кнопки «Сгенерировать» отвечают ошибкой, остальное приложение
+> работает как обычно; в модалке поздравления цитата покажется на английском (нейронка там
+> только переводчик).
+
+---
+
+### 3. GitHub CLI — `[github]`
+
+Шаг «Создать PR» отдаёт в буфер готовую команду `gh pr create --draft ... --reviewer <ники>`.
+Чтобы её было чем выполнить, поставьте и авторизуйте GitHub CLI:
 
 ```bash
 brew install gh
 gh auth login
 ```
 
-## Git commands dropdown and team-specific texts
+(Windows/Linux и другие способы установки — https://cli.github.com)
 
-Repository names, their base branches and the team-specific bits of the copied texts are config
-too — none of them live in the code:
+```ini
+[github]
+reviewers = "octocat, hubot"
+```
+
+`reviewers` — GitHub-ники ревьюверов через запятую; ровно их приложение подставит в
+`--reviewer`. Не задано — флаг просто не добавляется в команду.
+
+---
+
+### 4. Git-команды — `[git]`
+
+Дропдаун у названия ветки внизу экрана: `Create Branch`, `Push` и пункты `Rebase …` под ваши
+репозитории.
 
 ```ini
 [git]
 rebase_targets = "API3:main, Adminka:dev"
+```
 
+Формат — `Подпись:базовая-ветка` через запятую. Подпись видна в меню, базовая ветка уходит в
+команду `git rebase origin/<база>`. Не задано — в дропдауне остаются только `Create Branch` и
+`Push`.
+
+---
+
+### 5. Тексты команды — `[templates]` и `[docs]`
+
+Куски копируемых текстов, которые у каждой команды свои:
+
+```ini
 [templates]
 review_skip_migration_repos = "api_v3, adminka"
 deploy_config_project = "апи3"
-```
 
-Optional. `rebase_targets` (`Label:base-branch`, comma-separated) renders the "Rebase …" entries
-of the git commands dropdown next to the branch name — each copies `git rebase origin/<base>`;
-with no value the dropdown keeps only `Create Branch` and `Push`. `review_skip_migration_repos`
-lists the repositories whose migrations the Claude review prompt must skip — with no value that
-exception paragraph is left out of the prompt. `deploy_config_project` is the project named in
-the "Добавить в конфиг …" line of the deploy template copied on the last checklist item — with
-no value the line just has no project name.
-
-Links to your internal documentation are config too — the Claude review prompt cites them next
-to the matching review checklist points:
-
-```ini
 [docs]
 php_code_style = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/000000001"
 testing_standards = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/000000002"
 api_data_format = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/000000003"
 ```
 
-Every key is optional — a missing one simply leaves its link out of the prompt.
+- `review_skip_migration_repos` — репозитории, где миграции не выполняются: промпт ревью
+  попросит Claude их не проверять. Не задано — этот абзац в промпт не попадает.
+- `deploy_config_project` — название проекта в строке «Добавить в конфиг …» шаблона выливки.
+- `[docs]` — ссылки на вашу внутреннюю документацию (Confluence и т.п.), промпт ревью
+  подставит их рядом с соответствующими пунктами. Каждый ключ необязателен: не задан — ссылки
+  в промпте просто нет.
 
-## Work day config (quick time tracking)
+---
 
-Hovering the "time spent today" pill (top-left) reveals a circle button that opens a slider for
-logging time into the current task. The slider spans your work day and highlights today's total
-against your daily norm — set them in `config/params.ini`:
+### 6. Рабочий день — `[worktime]`
+
+Настраивает ползунок трека времени: его границы, обеденный перерыв и дневную норму часов.
 
 ```ini
 [worktime]
@@ -178,34 +394,22 @@ lunch_start = "12:00"
 lunch_end = "13:00"
 ```
 
-Optional — defaults are 09:00, 18:00, 8 hours and a 12:00–13:00 lunch break. The lunch break is
-highlighted in orange on the slider and never counted into the logged time; a break outside the
-work day bounds is simply ignored. `daily_hours` is also the threshold for the congrats modal
-below.
+Необязательно — показаны значения по умолчанию. Позиция бегунка — это время, **до которого
+отработан день**; обед подсвечен оранжевым и в трек не идёт. `daily_hours` — ещё и порог, при
+достижении которого появляется модалка поздравления.
 
-## Salary config (earnings shown on the congrats modal)
+---
 
-The first time-log of the day that brings today's total up to `[worktime].daily_hours` pops up
-a congrats modal with a motivation quote (see LLM config above) and, in parallel, today's
-earnings — computed from an hourly USD rate converted at the current exchange rate into the
-currency from `[currency]` (cached for 6 hours, see `storage/exchange_rate_cache.json` above).
+### 7. Заработок — `[salary]`, `[currency]`, `[services]`
+
+Первый за день трек времени, доводящий сумму до `[worktime].daily_hours`, показывает модалку
+поздравления: сколько заработано за день и мотивационная цитата.
 
 ```ini
 [salary]
 monthly_usd = 1500
 working_days_per_month = 21
-```
 
-Optional — defaults shown above. Hourly rate = `monthly_usd / (working_days_per_month *
-daily_hours)`. The earnings line is simply omitted from the modal if the exchange rate request
-fails or the computed amount is `0`.
-
-## Currency and external service URLs
-
-The currency the earnings are converted to, and the URLs of the keyless external services, are
-config too — nothing is hardcoded in PHP or JS:
-
-```ini
 [currency]
 code = "UAH"
 label = "грн"
@@ -215,25 +419,103 @@ exchange_rate_url = "https://open.er-api.com/v6/latest/USD"
 quotes_url = "https://zenquotes.io/api/random"
 ```
 
-Optional — defaults shown above. `code` is looked up in the exchange rate response (`rates`),
-`label` is what the UI prints next to the amount. Services that need a token stay in their own
-sections (`[atlassian]`, `[llm]`).
+Всё необязательно — показаны значения по умолчанию. Часовая ставка =
+`monthly_usd / (working_days_per_month × daily_hours)`, дальше сумма пересчитывается в валюту
+`[currency].code` по курсу с `exchange_rate_url` (кэш на 6 часов в
+`storage/exchange_rate_cache.json`). Сервисы курса и цитат — публичные, **ключи им не нужны**.
+Не удалось получить курс — строка про заработок в модалке просто не показывается.
 
-## Claude Code skill mode (hiding the steps the skill does for you)
+---
 
-When a Claude Code skill already handles committing, opening the PR, reviewing it and writing
-the PR description, those checklist items are just noise. One switch hides them:
+### 8. Режим скилла Claude Code — `[mode]`
+
+Если коммит, PR, ревью и описание PR за вас делает скилл Claude Code, эти пункты в чек-листе
+только мешают. Одним переключателем они скрываются, а вместо них появляется пункт
+«Закоммитить изменения» с командой `/commit`:
 
 ```ini
 [mode]
 claude_code_skill_mode = "1"
 ```
 
-`1` hides `code_written`, `pull_request`, `claude_review` and `pr_description` (list —
-`ChecklistRepository::CLAUDE_CODE_SKILL_MODE_HIDDEN_CODES`) together with the copy buttons that
-depend on the PR link they produce, and adds one step of its own right after "Create a git
-branch" — `skill_commit` ("Закоммитить изменения"), a modal that copies the skill's `/commit`
-command to the clipboard (list — `CLAUDE_CODE_SKILL_MODE_ONLY_CODES`, hidden when the mode is
-off). `0`, missing key or missing `config/params.ini` — full
-checklist. Nothing is deleted from the database: already ticked items come back exactly as they
-were when the mode is switched off.
+`1` — скрыть `code_written`, `pull_request`, `claude_review`, `pr_description` и показать
+`skill_commit`. `0`, отсутствующий ключ или отсутствующий `params.ini` — полный чек-лист.
+**Отметки в БД не удаляются**: выключите режим — пункты вернутся с уже проставленными
+галочками.
+
+---
+
+## Проверка, что всё поднялось
+
+| Что проверяем | Как | Ожидаемо |
+|---|---|---|
+| Приложение | Открыть http://localhost:8000/public/index.php | Экран с полем «ссылка на задачу» |
+| БД | `ls -la storage/app.sqlite` | Файл появился после первого открытия |
+| Jira | Вставить ссылку на реальную задачу | Сверху появился ключ задачи, чек-лист отрисовался; слева вверху — индикатор затреканного времени |
+| Jira (токен) | `curl -s -u "почта:токен" "https://ваш-домен.atlassian.net/rest/api/2/myself"` | JSON с вашим аккаунтом, а не `401` |
+| Нейронка | Дойти до «Создать ветку в Git» → «Сгенерировать» | В поле подставилось имя ветки |
+| GitHub CLI | `gh auth status` | `Logged in to github.com` |
+
+Логи PHP при запуске в Docker: `docker compose logs -f app`.
+
+## Что можно не настраивать
+
+| Не настроено | Что перестанет работать | Что продолжит |
+|---|---|---|
+| `[atlassian]` | Заголовок задачи из Jira, Story Points, переводы статусов, трек времени, индикатор времени | Весь чек-лист как ручной трекер, ветки, копирование текстов |
+| `[llm]` | Кнопки «Сгенерировать» (ветка, commit message, описание PR); цитата останется на английском | Всё остальное; тексты можно вписывать руками |
+| `[github]` | Ревьюверы в команде `gh pr create` | Сама команда копируется |
+| `[git]`, `[templates]`, `[docs]` | Пункты `Rebase …`, названия проектов и ссылки на документацию в копируемых текстах | Тексты копируются без этих кусков |
+| `[worktime]`, `[salary]`, `[currency]`, `[services]` | Ничего — подставятся значения по умолчанию | Всё |
+| Файл `params.ini` целиком | Все интеграции | Чек-лист, ветка, копирование текстов, прогресс |
+
+## Траблшутинг
+
+| Симптом | Причина и что делать |
+|---|---|
+| Белая страница / 404 при открытии | Сервер запущен не из корня проекта. Нужен `php -S localhost:8000` **из корня** и адрес `/public/index.php` — фронт ходит в API по относительному пути `../api/` |
+| `could not find driver` | Нет расширения `pdo_sqlite`. Проверьте `php -m \| grep pdo_sqlite`; в Docker оно уже собрано |
+| `unable to open database file` | Нет прав на запись в `storage/` → `chmod -R 775 storage` |
+| «Не удалось распознать ссылку на задачу» | В ссылке нет ключа вида `PROJ-123`. Подойдёт `.../browse/PROJ-123`, `?selectedIssue=PROJ-123` или просто `PROJ-123` |
+| «Задача не найдена в Jira» | Опечатка в ключе, либо у аккаунта нет доступа к проекту. Недоступность самой Jira задачу не блокирует |
+| Jira отвечает `401` | Неверная пара `email` + `api_token`, либо в `api_token` вписан пароль от аккаунта вместо токена |
+| Story Points не проставляются | Не тот `story_points_field` — найдите свой через `/rest/api/2/field` (см. выше) |
+| Перевод статуса падает | Название в `doing_status` / `pull_request_status` не совпадает с переходом в workflow — сверьте через `/rest/api/2/issue/PROJ-123/transitions` |
+| Кнопка «Сгенерировать» отвечает ошибкой | Провайдер в `[llm]` не настроен, либо LM Studio не запущен / указан не тот `lmstudio_model` |
+| Нейронка: `Connection refused` из Docker | В `lmstudio_host` стоит `localhost` вместо `host.docker.internal`, либо в LM Studio выключен *Serve on Local Network* |
+| Нейронка: `404` от LM Studio | Сервер во вкладке Developer не в состоянии *Running*, либо версия LM Studio старее 0.4 (нет `/api/v1/chat`) |
+| Claude: `credit balance is too low` | Пустой баланс на platform.claude.com → Billing |
+| Правки в коде не видны | Жёсткое кэширование браузером. Статика версионируется по mtime автоматически; при запуске в Docker после правки — `docker compose restart` |
+| Затреканное только что время не видно в списке | Индекс поиска Jira Cloud обновляется с задержкой — приложение дозапрашивает открытую задачу напрямую, остальные подтянутся через несколько секунд |
+
+## Структура проекта
+
+```
+config/params.ini          — единственный файл настроек (не в git, см. params.ini.example)
+database/schema.sql        — схема SQLite (tasks, checklist, task_checklist)
+storage/                   — создаётся сам: app.sqlite + кэш курса валют (не в git)
+src/                       — классы App\*: Database, Config, репозитории, сервисы,
+                             клиенты Jira / нейронок / курса валют / цитат
+api/                       — JSON-эндпоинты (POST, JSON-in/JSON-out), тонкий слой над сервисами
+public/index.php           — единственная HTML-страница
+public/assets/css/style.css — стили (светлая/тёмная тема, glass в духе macOS)
+public/assets/js/app.js    — вся клиентская логика (один файл, без сборки)
+docs/                      — скриншоты для этого README
+Dockerfile, docker-compose.yml — контейнерный запуск (PHP 8.3 + pdo_sqlite)
+```
+
+Полное описание архитектуры, бизнес-правил, каждого эндпоинта и поведения каждого пункта
+чек-листа — в [`CLAUDE.md`](CLAUDE.md).
+
+## Обновление и остановка
+
+```bash
+git pull                       # обновить код
+docker compose restart         # подхватить правки (проект смонтирован как volume)
+docker compose up -d --build   # нужно только если менялся Dockerfile
+docker compose down            # остановить
+```
+
+Схема БД и список пунктов чек-листа приводятся к актуальному виду автоматически при первом
+запросе после обновления — ничего запускать руками не нужно. Файл `storage/app.sqlite` при
+обновлениях не трогается: отметки и задачи сохраняются.
