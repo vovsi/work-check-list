@@ -86,7 +86,8 @@ database is just a file next to the code.
 | Затрекать время *(log time)* | A slider spanning your whole work day (lunch excluded) → adds a worklog to Jira. When you hit your daily norm, a congrats modal shows today's earnings and a motivational quote | Jira |
 | Отправить PR ревьюверу *(send the PR to a reviewer)* | Copies the PR link and a message template with the deploy instruction | — |
 
-Independently of the checklist you also get: a "time logged today" indicator, quick time logging
+Independently of the checklist you also get: a back arrow in the top left corner (returns to the
+link screen so you can open another task), a "time logged today" indicator, quick time logging
 with a single slider, a list of today's tasks, and a git commands dropdown next to the branch
 name (`checkout -b`, `push`, `rebase` onto your base branches).
 

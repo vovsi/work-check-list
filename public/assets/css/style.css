@@ -134,6 +134,33 @@ body {
     gap: 5px;
 }
 
+/* Возврат к экрану ввода ссылки — стеклянный кружок в той же группе, что индикатор
+   времени (симметрично шестерёнке справа). Раньше это была текстовая ссылка «сменить задачу»
+   под заголовком: серый текст без границ не читался как кликабельный и занимал отдельную
+   строку в окне 500×500. Виден только внутри задачи (класс hidden снимает showTaskScreen) */
+.back-btn {
+    flex: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    border: 1px solid var(--surface-border);
+    background: var(--surface);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    box-shadow: var(--shadow);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: color 0.15s ease, transform 0.18s ease;
+}
+
+.back-btn:hover {
+    color: var(--text-primary);
+    transform: translateX(-2px);
+}
+
 .today-time {
     height: 30px;
     padding: 0 11px;
@@ -1193,19 +1220,6 @@ html[data-theme="dark"] .modal:has(.congrats-modal) {
 
 .task-id:hover {
     text-decoration: underline;
-}
-
-.link-btn {
-    border: none;
-    background: none;
-    color: var(--text-tertiary);
-    font-size: 11.5px;
-    cursor: pointer;
-    padding: 2px 6px;
-}
-
-.link-btn:hover {
-    color: var(--accent);
 }
 
 .progress {

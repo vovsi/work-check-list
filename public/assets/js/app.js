@@ -950,6 +950,7 @@
         taskIdLabel.href = state.task.task_link;
         renderGitBranch();
         renderChecklist();
+        changeTaskBtn.classList.remove('hidden'); // возврат к вводу ссылки есть только внутри задачи
         updateTrackTimeAvailability(); // быстрый трек времени доступен только внутри задачи
     }
 
@@ -962,6 +963,7 @@
         taskLinkInput.value = '';
         taskLinkInput.focus();
         renderRecentTasks();
+        changeTaskBtn.classList.add('hidden');
         updateTrackTimeAvailability();
     }
 

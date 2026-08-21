@@ -50,9 +50,16 @@ $assetVersion = static function (string $relativePath): string {
 </head>
 <body>
 
-<!-- Затреканное сегодня время во всех задачах Jira (подгружается отдельно от страницы) и
-     кружок быстрого трека времени, всплывающий правее по наведению (только когда открыта задача) -->
+<!-- Кнопка возврата к экрану ввода ссылки (видна только внутри задачи), затреканное сегодня
+     время во всех задачах Jira (подгружается отдельно от страницы) и кружок быстрого трека
+     времени, всплывающий правее по наведению (только когда открыта задача) -->
 <div class="today-time-group">
+    <button type="button" id="change-task-btn" class="back-btn hidden" data-tooltip="Другая задача" aria-label="Другая задача">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5"/>
+            <path d="M11 6l-6 6 6 6"/>
+        </svg>
+    </button>
     <button type="button" id="today-time" class="today-time hidden" data-tooltip="Затрекано времени" aria-label="Затреканное сегодня время">
         <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="9"/>
@@ -141,7 +148,6 @@ $assetVersion = static function (string $relativePath): string {
     <section id="task-screen" class="screen task-screen hidden">
         <div class="task-header">
             <a class="task-id" id="task-id-label" target="_blank" rel="noopener"></a>
-            <button id="change-task-btn" class="link-btn" data-tooltip="Ввести другую задачу">сменить задачу</button>
         </div>
 
         <!-- Прогресс выполнения чек-листа -->
