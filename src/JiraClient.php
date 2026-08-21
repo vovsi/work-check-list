@@ -181,11 +181,7 @@ final class JiraClient
         $me = $this->request('GET', '/rest/api/2/myself', null, 'при получении текущего пользователя');
         $accountId = (string) ($me['accountId'] ?? '');
 
-        try {
-            $timezone = new DateTimeZone((string) ($me['timeZone'] ?? 'UTC'));
-        } catch (Exception $e) {
-            $timezone = new DateTimeZone('UTC');
-        }
+        $timezone = $this->timeZoneOf($me);
         $dayStart = (new DateTimeImmutable('today', $timezone))->getTimestamp();
         $dayEnd = (new DateTimeImmutable('tomorrow', $timezone))->getTimestamp();
 
@@ -271,26 +267,53 @@ final class JiraClient
     }
 
     /**
-     * Задачи, «зависшие» в статусе: сейчас находятся в нём и попали в него раньше, чем
-     * $hours часов назад. Считаем только свои (assignee = currentUser()) — приложение
+     * Таймзона пользователя Jira — в ней же JQL понимает даты (startOfDay(), сравнения с
+     * «yyyy/MM/dd HH:mm»), поэтому абсолютные границы для запроса считаются в ней, а не в
+     * таймзоне сервера: контейнер живёт в UTC и давал бы сдвиг.
+     */
+    public function fetchUserTimeZone(): DateTimeZone
+    {
+        return $this->timeZoneOf(
+            $this->request('GET', '/rest/api/2/myself', null, 'при получении текущего пользователя')
+        );
+    }
+
+    /** Таймзона из ответа /myself; нераспознанное значение — UTC, это не повод ронять запрос */
+    private function timeZoneOf(array $me): DateTimeZone
+    {
+        try {
+            return new DateTimeZone((string) ($me['timeZone'] ?? 'UTC'));
+        } catch (Exception $e) {
+            return new DateTimeZone('UTC');
+        }
+    }
+
+    /**
+     * Задачи, «зависшие» в статусе: сейчас находятся в нём и попали в него раньше момента
+     * $changedBefore. Считаем только свои (assignee = currentUser()) — приложение
      * персональное, как и остальные обращения к Jira здесь.
+     *
+     * Порог приходит абсолютным моментом, а не числом часов: относительное «-24h» в JQL не
+     * умеет пропускать нерабочие дни, а это бизнес-правило показателя (см. DashboardService).
+     * Момент форматируется в таймзоне переданной даты — вызывающий берёт её у
+     * fetchUserTimeZone(), потому что JQL трактует дату в таймзоне пользователя Jira.
      *
      * Момент попадания в статус берём из истории изменений (status CHANGED TO ... BEFORE),
      * а не из полей updated/statuscategorychangedate: updated меняет любой комментарий,
      * а категория статуса у Doing и Pull request одна и та же, и её дата не обновляется.
-     * Задача, успевшая выйти из статуса и вернуться в него за последние $hours часов,
+     * Задача, успевшая выйти из статуса и вернуться в него после $changedBefore,
      * в выборку тоже попадёт — точность здесь не стоит запроса changelog по каждой задаче.
      *
      * @return list<array{task_id: string, title: string, status: string, link: string}>
      */
-    public function fetchIssuesStuckInStatus(string $statusName, int $hours): array
+    public function fetchIssuesStuckInStatus(string $statusName, DateTimeImmutable $changedBefore): array
     {
         $status = str_replace('"', '\\"', $statusName);
         $jql = sprintf(
-            'assignee = currentUser() AND status = "%s" AND status CHANGED TO "%s" BEFORE "-%dh" ORDER BY updated ASC',
+            'assignee = currentUser() AND status = "%s" AND status CHANGED TO "%s" BEFORE "%s" ORDER BY updated ASC',
             $status,
             $status,
-            $hours
+            $changedBefore->format('Y/m/d H:i')
         );
 
         // Тот же /search/jql, что и у сегодняшних ворклогов (старый /search на Jira Cloud

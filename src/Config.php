@@ -18,6 +18,15 @@ final class Config
         'lunch_end' => '13:00',
     ];
 
+    /**
+     * Нерабочие дни недели по умолчанию (ISO-8601: 1 = Пн … 7 = Вс) — суббота и воскресенье.
+     * Используются показателем «зависшие PR» на дашборде (см. nonWorkingWeekdays()).
+     */
+    public const NON_WORKING_WEEKDAYS_DEFAULT = [6, 7];
+
+    /** Порог показателя «зависшие PR» по умолчанию, часов (см. stalePullRequestHours()) */
+    public const STALE_PULL_REQUEST_HOURS_DEFAULT = 24;
+
     /** Значения [salary] по умолчанию (см. salaryHourlyRateUsd()) */
     public const SALARY_DEFAULTS = [
         'monthly_usd' => 1500.0,
@@ -34,6 +43,17 @@ final class Config
     public const SERVICE_URL_DEFAULTS = [
         'exchange_rate_url' => 'https://open.er-api.com/v6/latest/USD',
         'quotes_url' => 'https://zenquotes.io/api/random',
+    ];
+
+    /** Названия дней недели для [worktime].non_working_days → номер ISO-8601 (сравнение по первым трём буквам) */
+    private const WEEKDAY_ALIASES = [
+        'mon' => 1,
+        'tue' => 2,
+        'wed' => 3,
+        'thu' => 4,
+        'fri' => 5,
+        'sat' => 6,
+        'sun' => 7,
     ];
 
     /** Ключи [docs] — ссылки на внутреннюю документацию команды, подставляемые в промпт Claude-ревью */
@@ -182,6 +202,59 @@ final class Config
     }
 
     /**
+     * Дни недели, которые не идут в счёт часов «зависания» задачи (показатель дашборда):
+     * перевели PR в пятницу вечером — до утра рабочего дня задача зависшей не считается.
+     * Формат — «sat, sun» (можно полными названиями) либо номера ISO-8601 «6, 7».
+     * Ключ не задан — суббота и воскресенье; задан пустым — не пропускаем ни один день.
+     * Перечислены все семь дней — список игнорируется: иначе показатель не сработал бы никогда.
+     *
+     * @return list<int>
+     */
+    public static function nonWorkingWeekdays(): array
+    {
+        $section = self::load()['worktime'] ?? [];
+        if (!array_key_exists('non_working_days', $section)) {
+            return self::NON_WORKING_WEEKDAYS_DEFAULT;
+        }
+
+        $days = [];
+        foreach (self::commaList($section, 'non_working_days') as $token) {
+            $day = self::parseWeekday($token);
+            if ($day !== null && !in_array($day, $days, true)) {
+                $days[] = $day;
+            }
+        }
+        sort($days);
+
+        return count($days) >= 7 ? [] : $days;
+    }
+
+    /**
+     * Сколько часов в статусе Pull request считается нормой: дольше — задача попадает в
+     * показатель «зависшие PR» на дашборде. Считаются только часы рабочих дней (нерабочие
+     * пропускаются, см. nonWorkingWeekdays()). Некорректное значение (не число, ≤ 0) молча
+     * заменяется на STALE_PULL_REQUEST_HOURS_DEFAULT — показатель не должен ломаться из-за опечатки.
+     */
+    public static function stalePullRequestHours(): int
+    {
+        $hours = (int) (self::load()['dashboard']['stale_pull_request_hours'] ?? 0);
+
+        return $hours > 0 ? $hours : self::STALE_PULL_REQUEST_HOURS_DEFAULT;
+    }
+
+    /** «sat» / «saturday» / «6» → 6 (ISO-8601), непонятное значение → null */
+    private static function parseWeekday(string $token): ?int
+    {
+        $token = strtolower(trim($token));
+
+        if (preg_match('/^[1-7]$/', $token) === 1) {
+            return (int) $token;
+        }
+
+        return self::WEEKDAY_ALIASES[substr($token, 0, 3)] ?? null;
+    }
+
+    /**
      * Часовая ставка в USD для расчёта заработка за день в модалке поздравления
      * (EarningsService, показывается при достижении [worktime].daily_hours) — оклад в месяц
      * делится на условное число рабочих часов в месяце. Некорректные значения (≤ 0) молча
@@ -309,12 +382,6 @@ final class Config
         }
 
         return $links;
-    }
-
-    /** Название проекта в шаблоне выливки («Добавить в конфиг <…>»). Не задано — строка без названия */
-    public static function deployConfigProject(): string
-    {
-        return self::stringOrDefault(self::load()['templates'] ?? [], 'deploy_config_project', '');
     }
 
     /**

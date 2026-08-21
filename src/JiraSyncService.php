@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App;
 
+use DateTimeImmutable;
+use DateTimeZone;
 use Throwable;
 
 /** Оркестрирует подтягивание заголовка/описания задачи из Jira и сохранение их в БД */
@@ -99,13 +101,19 @@ final class JiraSyncService
     }
 
     /**
-     * Задачи, зависшие в статусе дольше $hours часов (метрика дашборда).
+     * Задачи, попавшие в статус раньше $changedBefore и до сих пор в нём (метрика дашборда).
      *
      * @return list<array{task_id: string, title: string, status: string, link: string}>
      */
-    public function getIssuesStuckInStatus(string $statusName, int $hours): array
+    public function getIssuesStuckInStatus(string $statusName, DateTimeImmutable $changedBefore): array
     {
-        return $this->client->fetchIssuesStuckInStatus($statusName, $hours);
+        return $this->client->fetchIssuesStuckInStatus($statusName, $changedBefore);
+    }
+
+    /** Таймзона пользователя Jira — нужна тому, кто считает абсолютные границы для JQL */
+    public function getUserTimeZone(): DateTimeZone
+    {
+        return $this->client->fetchUserTimeZone();
     }
 
     public function addWorklog(array $task, int $seconds): void

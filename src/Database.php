@@ -34,7 +34,7 @@ final class Database
         ['code' => 'jira_description', 'title' => 'Оставить описание в Jira'],
         ['code' => 'status_pull_request', 'title' => 'Перевести задачу в Pull Request'],
         ['code' => 'time_tracking', 'title' => 'Затрекать время'],
-        ['code' => 'send_pr', 'title' => 'Отправить PR ревьюверу'],
+        ['code' => 'send_pr', 'title' => 'PR отправлен ревьюверу'],
     ];
 
     public static function connection(): PDO

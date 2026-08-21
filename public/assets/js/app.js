@@ -2,11 +2,7 @@
 (() => {
     'use strict';
 
-    // ==================== Тексты для копирования (пункты 6 и 7) ====================
-
-    /** Название проекта в строке «Добавить в конфиг …» шаблона выливки — из config/params.ini
-     * ([templates].deploy_config_project), в код не зашивается: у каждой команды оно своё */
-    const DEPLOY_CONFIG_PROJECT = (window.DEVFLOW_CONFIG && window.DEVFLOW_CONFIG.deployConfigProject) || '';
+    // ==================== Тексты для копирования ====================
 
     /** Репозитории без миграций — исключение в промпте Claude-ревью, тоже из конфига
      * ([templates].review_skip_migration_repos). Список пуст — блок исключения не добавляется */
@@ -26,21 +22,6 @@
     /** Команда скилла Claude Code, который делает коммит за разработчика (пункт `skill_commit`,
      * виден только при включённом [mode].claude_code_skill_mode) */
     const SKILL_COMMIT_COMMAND = '/commit';
-
-    /** Подсказка вместо ссылки на PR — когда пункт «Создать PR» жив, но ссылку он не сохранил */
-    const PR_LINK_MISSING_HINT = '[ссылка на PR не найдена — вставьте вручную]';
-
-    /** prLinkFallback — чем заменить ссылку на PR в «3. Вылить», если её нет: подсказкой выше
-     * либо пустой строкой, когда пункт «Создать PR» отключён и ссылки взяться негде */
-    function buildDeployDetailsText(taskId, prLink, prLinkFallback) {
-        const configTarget = DEPLOY_CONFIG_PROJECT ? ` ${DEPLOY_CONFIG_PROJECT}` : '';
-        const deployTarget = prLink || prLinkFallback;
-
-        return `Для выливки ${taskId} необходимо:\n` +
-            '1. Запустить скрипты БД:\n```\n\n```\n' +
-            `2. Добавить в конфиг${configTarget}:\n\`\`\`\n\n\`\`\`\n` +
-            '3. Вылить:' + (deployTarget ? ` ${deployTarget}` : '');
-    }
 
     const JIRA_DESCRIPTION_HTML =
         '<b> Results</b><br/>1. <br/>' +
@@ -314,6 +295,16 @@
         return `<span class="ios-spinner${sizeClass}" aria-hidden="true">${'<i></i>'.repeat(8)}</span>`;
     }
 
+    /**
+     * Разметка скелетона (см. .skeleton в style.css) — плашка на месте значения, которое ещё
+     * грузится. Ставится туда, где иначе была бы пустота до ответа сервера; спиннер там не
+     * годится (по HIG он рядом с контролом, а не на месте результата). Размер задаётся в CSS
+     * по месту применения, здесь параметров нет намеренно.
+     */
+    function skeletonHtml() {
+        return '<span class="skeleton" aria-hidden="true"></span>';
+    }
+
     /** Значок окна — намекает, что по клику на пункт откроется модалка, а не сразу отметка */
     const MODAL_HINT_SVG =
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
@@ -331,7 +322,6 @@
         'claude_review',
         'pr_description',
         'jira_description',
-        'send_pr',
     ]);
 
     // ==================== Иконки сервисов (справа у каждого пункта чек-листа) ====================
@@ -412,8 +402,9 @@
         send_pr: 'telegram',
     };
 
-    /** Минимальный интервал между перезапросами затреканного сегодня времени при возврате к окну */
-    const TODAY_TIME_REFRESH_MS = 60 * 1000;
+    /** Минимальный интервал между перезапросами данных из Jira при возврате к окну —
+     * общий для индикатора затреканного времени и показателей дашборда */
+    const BACKGROUND_REFRESH_MS = 60 * 1000;
     let todayTimeLoadedAt = 0;
     let todayTimeLoading = false;
 
@@ -1048,7 +1039,7 @@
             openBtn.className = 'recent-task-open';
             openBtn.innerHTML =
                 `<span class="recent-task-code">${escapeHtml(task.taskId)}</span>` +
-                '<span class="recent-task-percent"></span>' +
+                `<span class="recent-task-percent">${skeletonHtml()}</span>` +
                 '<span class="task-ripple" aria-hidden="true">' +
                 '<span></span><span></span><span></span><span></span>' +
                 '</span>';
@@ -1077,6 +1068,7 @@
 
             // Процент выполнения подгружается отдельно и необязателен для самого открытия
             // задачи — ошибка (например, задача удалена из БД) просто оставит поле пустым.
+            // До ответа на месте процента стоит скелетон, а не пустота.
             apiCall('../api/state.php', { link: task.link })
                 .then((data) => {
                     const total = data.checklist.length;
@@ -1084,7 +1076,9 @@
                     const percent = total === 0 ? 0 : Math.round((done / total) * 100);
                     openBtn.querySelector('.recent-task-percent').textContent = `${percent}%`;
                 })
-                .catch(() => {});
+                .catch(() => {
+                    openBtn.querySelector('.recent-task-percent').textContent = '';
+                });
         });
         recentTasksEl.classList.remove('hidden');
     }
@@ -1741,48 +1735,8 @@
             });
         },
 
-        // Отправить PR ревьюверу — модалка с двумя вариантами копирования, отметка только по «Готово»
-        send_pr: async (item) => {
-            const link = sessionStorage.getItem(prLinkStorageKey());
-            // Ссылку на PR сохраняет пункт «Создать PR» — пока он отключён, копировать нечего
-            const hasPrLink = hasChecklistItem('pull_request');
-            const detailsText = buildDeployDetailsText(
-                state.task.task_id,
-                link,
-                hasPrLink ? PR_LINK_MISSING_HINT : ''
-            );
-            const confirmed = await showModal(
-                'Отправить PR ревьюверу',
-                '<div class="modal-copy-actions">' +
-                    (hasPrLink
-                        ? '<button type="button" class="btn btn-secondary" data-copy-btn="link">Скопировать Link to PR</button>'
-                        : '') +
-                    '<button type="button" class="btn btn-secondary" data-copy-btn="details">Скопировать Details template</button>' +
-                    '</div>',
-                [
-                    { label: 'Отмена', value: false },
-                    { label: 'Готово', primary: true, value: true },
-                ],
-                (bodyEl) => {
-                    const linkBtn = bodyEl.querySelector('[data-copy-btn="link"]');
-                    linkBtn?.addEventListener('click', async () => {
-                        if (link) {
-                            await copyText(link);
-                            notifyCopied(`ссылка на PR «${link}»`);
-                        } else {
-                            showToast('Ссылка на PR не найдена — скопируйте вручную');
-                        }
-                    });
-                    bodyEl.querySelector('[data-copy-btn="details"]').addEventListener('click', async () => {
-                        await copyText(detailsText);
-                        notifyCopied('шаблон для выливки');
-                    });
-                }
-            );
-            if (confirmed) {
-                await markDone(item.id);
-            }
-        },
+        // PR отправлен ревьюверу — отмечается сразу по клику, без модалки и запросов
+        send_pr: (item) => markDone(item.id),
     };
 
     function handleItemClick(item) {
@@ -1875,7 +1829,7 @@
         todayTimeLoadedAt = Date.now();
         todayTimeEl.classList.remove('hidden');
         todayTimeEl.classList.remove('today-time--met');
-        todayTimeValueEl.innerHTML = spinnerHtml();
+        todayTimeValueEl.innerHTML = skeletonHtml();
         try {
             const data = await apiCall('../api/today_time_spent.php', ensureTaskPayload());
             applyTodayTimeSpent(data.time_spent_seconds || 0);
@@ -2344,17 +2298,11 @@
 
     /** Возврат к окну — момент «я вернулся из Jira, где мог затрекать время руками»,
      * но переключаются между окнами часто, а время в Jira так часто не меняется:
-     * повторный запрос не чаще раза в TODAY_TIME_REFRESH_MS */
+     * повторный запрос не чаще раза в BACKGROUND_REFRESH_MS (слушатели — в инициализации) */
     function refreshTodayTimeSpentOnReturn() {
-        if (document.visibilityState !== 'visible') return;
-        if (Date.now() - todayTimeLoadedAt < TODAY_TIME_REFRESH_MS) return;
+        if (Date.now() - todayTimeLoadedAt < BACKGROUND_REFRESH_MS) return;
         loadTodayTimeSpent();
     }
-
-    // Оба события нужны: visibilitychange ловит возврат к свёрнутому окну/неактивной вкладке,
-    // а focus — переход в другое приложение (окно при этом остаётся visible, и visibilitychange молчит)
-    document.addEventListener('visibilitychange', refreshTodayTimeSpentOnReturn);
-    window.addEventListener('focus', refreshTodayTimeSpentOnReturn);
 
     // Клик по самому индикатору — явный запрос пользователя, поэтому идёт мимо троттлинга
     todayTimeEl.addEventListener('click', () => loadTodayTimeSpent());
@@ -2373,17 +2321,47 @@
     let dashboardLoadedAt = 0;
     let dashboardLoading = false;
 
+    /** Короткие названия дней недели по номеру ISO-8601 (1 = Пн) — для подписи нерабочих дней */
+    const WEEKDAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
+
+    /**
+     * «(Сб, Вс не считаем)» — какие дни недели не идут в счёт часов «зависания». Список
+     * приходит с сервера ([worktime].non_working_days), поэтому текст честен и при другой
+     * настройке: дни не заданы — приписки нет вообще.
+     */
+    function daysOffNote(metric) {
+        const days = (metric && metric.non_working_weekdays) || [];
+        const names = days.map((day) => WEEKDAY_SHORT[day - 1]).filter(Boolean);
+
+        return names.length === 0 ? '' : ` (${names.join(', ')} не считаем)`;
+    }
+
+    /**
+     * Красная точка на кнопке возврата к экрану ввода ссылки: внутри задачи дашборд не виден,
+     * а показатели обновляются в фоне — иначе о ненулевом показателе никак не узнать, не выйдя
+     * из задачи. Считается по всем показателям ответа (у каждого есть `count`), поэтому новый
+     * показатель попадает в точку сам, без правок здесь.
+     */
+    function updateDashboardAlert(data) {
+        const hasAlert = Object.values(data || {})
+            .some((metric) => metric && Number(metric.count) > 0);
+        changeTaskBtn.classList.toggle('has-alert', hasAlert);
+    }
+
     function applyDashboard(data) {
         dashboardLoadedAt = Date.now();
+        dashboardEl.classList.remove('loading');
+        updateDashboardAlert(data);
         stalePrMetric = data.stale_pull_requests || null;
         if (!stalePrMetric) return;
 
         metricStalePrValueEl.textContent = String(stalePrMetric.count || 0);
-        // Порог и название статуса приходят с сервера (DashboardService, [atlassian] в конфиге) —
-        // на фронте их не зашиваем
+        // Порог, название статуса и нерабочие дни приходят с сервера (DashboardService,
+        // [atlassian]/[worktime] в конфиге) — на фронте их не зашиваем
         metricStalePrLabelEl.textContent = `Зависшие PR > ${stalePrMetric.hours} ч`;
         metricStalePrEl.dataset.tooltip =
-            `Задачи в статусе «${stalePrMetric.status}» дольше ${stalePrMetric.hours} ч`;
+            `Задачи в статусе «${stalePrMetric.status}» дольше ${stalePrMetric.hours} ч`
+            + daysOffNote(stalePrMetric);
     }
 
     /**
@@ -2396,20 +2374,22 @@
         dashboardLoading = true;
         dashboardEl.classList.remove('hidden');
         setButtonLoading(dashboardRefreshBtn, true);
-        // Спиннер в слоте значения — только на первой загрузке: при актуализации значение уже
-        // есть, и крутится спиннер на самой кнопке обновления
-        if (!metricStalePrValueEl.textContent) {
-            metricStalePrValueEl.innerHTML = spinnerHtml();
-        }
         try {
             applyDashboard(await apiCall('../api/dashboard.php', {}));
         } catch (e) {
             dashboardEl.classList.add('hidden');
-            metricStalePrValueEl.textContent = '';
+            updateDashboardAlert(null);
         } finally {
             setButtonLoading(dashboardRefreshBtn, false);
             dashboardLoading = false;
         }
+    }
+
+    /** Возврат к окну — тот же приём и тот же троттлинг, что у индикатора времени: PR
+     * ревьювят и мерджат в другой вкладке, поэтому показатели к возвращению уже устарели */
+    function refreshDashboardOnReturn() {
+        if (Date.now() - dashboardLoadedAt < BACKGROUND_REFRESH_MS) return;
+        loadDashboard();
     }
 
     dashboardRefreshBtn.addEventListener('click', () => loadDashboard());
@@ -2429,7 +2409,7 @@
 
         const bodyHtml = '<div class="today-tasks-modal">' +
             (tasks.length === 0
-                ? `<p class="today-tasks-empty">Нет задач, зависших в статусе «${escapeHtml(status)}» дольше ${hours} ч.</p>`
+                ? `<p class="today-tasks-empty">Нет задач, зависших в статусе «${escapeHtml(status)}» дольше ${hours} ч${escapeHtml(daysOffNote(stalePrMetric))}.</p>`
                 : taskListHtml(tasks, { withStatus: false, withTime: false })) +
             '</div>';
 
@@ -2444,6 +2424,19 @@
     initTheme();
     loadTodayTimeSpent();
     loadDashboard();
+
+    /** Возврат к окну обновляет и индикатор времени, и показатели дашборда — у каждого свой
+     * троттлинг, но событие и проверка видимости общие */
+    function refreshOnReturn() {
+        if (document.visibilityState !== 'visible') return;
+        refreshTodayTimeSpentOnReturn();
+        refreshDashboardOnReturn();
+    }
+
+    // Оба события нужны: visibilitychange ловит возврат к свёрнутому окну/неактивной вкладке,
+    // а focus — переход в другое приложение (окно при этом остаётся visible, и visibilitychange молчит)
+    document.addEventListener('visibilitychange', refreshOnReturn);
+    window.addEventListener('focus', refreshOnReturn);
 
     const savedLink = localStorage.getItem(TASK_LINK_STORAGE_KEY);
     if (savedLink) {

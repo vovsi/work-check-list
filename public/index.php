@@ -18,14 +18,12 @@ try {
     $workTime = Config::workTime();
     $gitRebaseTargets = Config::gitRebaseTargets();
     $reviewSkipMigrationRepos = Config::reviewSkipMigrationRepos();
-    $deployConfigProject = Config::deployConfigProject();
     $reviewDocLinks = Config::reviewDocLinks();
 } catch (\Throwable $e) {
     $githubReviewers = [];
     $workTime = Config::WORK_TIME_DEFAULTS;
     $gitRebaseTargets = [];
     $reviewSkipMigrationRepos = [];
-    $deployConfigProject = '';
     $reviewDocLinks = [];
 }
 
@@ -109,11 +107,11 @@ $assetVersion = static function (string $relativePath): string {
 
             <!-- Дашборд показателей по Jira (api/dashboard.php). Клик по показателю открывает
                  список задач за числом, кнопка справа — актуализация данных -->
-            <div id="dashboard" class="dashboard hidden">
+            <div id="dashboard" class="dashboard hidden loading">
                 <div class="dashboard-metrics">
                     <button type="button" id="metric-stale-pr" class="metric metric--blue">
-                        <span class="metric-value" id="metric-stale-pr-value"></span>
-                        <span class="metric-label" id="metric-stale-pr-label">Зависшие PR</span>
+                        <span class="metric-value" id="metric-stale-pr-value"><span class="skeleton" aria-hidden="true"></span></span>
+                        <span class="metric-label" id="metric-stale-pr-label"><span class="skeleton" aria-hidden="true"></span></span>
                     </button>
                 </div>
                 <button type="button" id="dashboard-refresh" class="dashboard-refresh" aria-label="Обновить показатели">
@@ -215,7 +213,6 @@ $assetVersion = static function (string $relativePath): string {
         githubReviewers: <?= json_encode($githubReviewers, JSON_UNESCAPED_UNICODE) ?>,
         workTime: <?= json_encode($workTime, JSON_UNESCAPED_UNICODE) ?>,
         reviewSkipMigrationRepos: <?= json_encode($reviewSkipMigrationRepos, JSON_UNESCAPED_UNICODE) ?>,
-        deployConfigProject: <?= json_encode($deployConfigProject, JSON_UNESCAPED_UNICODE) ?>,
         reviewDocLinks: <?= json_encode($reviewDocLinks, JSON_UNESCAPED_UNICODE | JSON_FORCE_OBJECT) ?>
     };
 </script>

@@ -44,8 +44,9 @@ branch name and the PR description with an LLM, transitions the Jira status, log
   - [4. Git commands — `[git]`](#4-git-commands--git)
   - [5. Team-specific texts — `[templates]` and `[docs]`](#5-team-specific-texts--templates-and-docs)
   - [6. Work day — `[worktime]`](#6-work-day--worktime)
-  - [7. Earnings — `[salary]`, `[currency]`, `[services]`](#7-earnings--salary-currency-services)
-  - [8. Claude Code skill mode — `[mode]`](#8-claude-code-skill-mode--mode)
+  - [7. Stuck PRs metric — `[dashboard]`](#7-stuck-prs-metric--dashboard)
+  - [8. Earnings — `[salary]`, `[currency]`, `[services]`](#8-earnings--salary-currency-services)
+  - [9. Claude Code skill mode — `[mode]`](#9-claude-code-skill-mode--mode)
 - [Verify everything is up](#verify-everything-is-up)
 - [What you can leave unconfigured](#what-you-can-leave-unconfigured)
 - [Troubleshooting](#troubleshooting)
@@ -84,7 +85,7 @@ database is just a file next to the code.
 | Оставить описание в Jira *(leave a description in Jira)* | Copies formatted text for a Jira comment | — |
 | Перевести задачу в Pull Request | Transitions the Jira task to the status from your config | Jira |
 | Затрекать время *(log time)* | A slider spanning your whole work day (lunch excluded) → adds a worklog to Jira. When you hit your daily norm, a congrats modal shows today's earnings and a motivational quote | Jira |
-| Отправить PR ревьюверу *(send the PR to a reviewer)* | Copies the PR link and a message template with the deploy instruction | — |
+| PR отправлен ревьюверу *(the PR was sent to a reviewer)* | Just a tick | — |
 
 Independently of the checklist you also get: a back arrow in the top left corner (returns to the
 link screen so you can open another task), a "time logged today" indicator, quick time logging
@@ -93,9 +94,18 @@ name (`checkout -b`, `push`, `rebase` onto your base branches).
 
 The link screen also shows a small dashboard above the input field. For now it holds a single
 metric — "Зависшие PR > 24 ч" ("stuck PRs > 24 h"): how many of your Jira tasks have been sitting
-in the Pull request status (the one from `pull_request_status` in your config) for longer than
-24 hours. Click the tile to get the list of those tasks — each row links to Jira. The round
-button on the right refreshes the numbers; hover it to see how long ago they were fetched.
+in the Pull request status (the one from `pull_request_status` in your config) for longer than the
+threshold from `[dashboard]`. **Days off don't count** — a PR moved on Friday at 17:00 only becomes
+"stuck" on Monday at 17:00, not on Saturday (the weekdays to skip live in
+`[worktime].non_working_days`). Click the tile to get the list of those tasks — each row links to
+Jira; hover the tile to see the status, the threshold and which days are skipped. The round
+button on the right refreshes the numbers; hover it to see how long ago they were fetched. Like
+the "time logged today" indicator, the numbers also refresh on their own whenever you come back
+to the window (at most once a minute), so a PR merged in another tab doesn't keep counting.
+
+While a task is open the dashboard itself is off-screen, so a **red dot appears on the back arrow**
+(top-left, "Другая задача") whenever any dashboard metric is above zero. It follows the background
+refresh: the dot shows up (or goes away) as soon as the numbers change, without leaving the task.
 
 ## What you need to install
 
@@ -377,7 +387,6 @@ The pieces of the copied texts that differ from team to team:
 ```ini
 [templates]
 review_skip_migration_repos = "api_v3, adminka"
-deploy_config_project = "апи3"
 
 [docs]
 php_code_style = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/000000001"
@@ -387,8 +396,6 @@ api_data_format = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/0
 
 - `review_skip_migration_repos` — repositories where migrations are not run: the review prompt
   asks Claude to skip them. Not set — that paragraph is left out of the prompt.
-- `deploy_config_project` — the project named in the "Добавить в конфиг …" ("add to the config …")
-  line of the deploy template.
 - `[docs]` — links to your internal documentation (Confluence and the like); the review prompt
   cites them next to the matching points. Every key is optional: a missing one simply leaves its
   link out of the prompt.
@@ -397,7 +404,8 @@ api_data_format = "https://your-domain.atlassian.net/wiki/spaces/DevTeam/pages/0
 
 ### 6. Work day — `[worktime]`
 
-Configures the time-logging slider: its bounds, the lunch break and your daily hours norm.
+Configures the time-logging slider (its bounds, the lunch break and your daily hours norm) and
+which weekdays are days off.
 
 ```ini
 [worktime]
@@ -406,15 +414,38 @@ end = "18:00"
 daily_hours = 8
 lunch_start = "12:00"
 lunch_end = "13:00"
+non_working_days = "sat, sun"
 ```
 
 Optional — the defaults are shown above. The slider position is the time **up to which the day
 is worked**; lunch is highlighted in orange and never logged. `daily_hours` is also the
 threshold that triggers the congrats modal.
 
+`non_working_days` is used by the "stuck PRs" dashboard metric: hours that fall on those days
+are not counted, so a PR moved on Friday evening stays fine over the weekend. Write it as
+`"sat, sun"` (full names work too) or as ISO-8601 numbers `"6, 7"`, where 1 is Monday and 7 is
+Sunday. Leave the key out and Saturday + Sunday are used; set it to an empty string and every
+day counts. Listing all seven days is ignored — otherwise nothing would ever become stuck.
+
 ---
 
-### 7. Earnings — `[salary]`, `[currency]`, `[services]`
+### 7. Stuck PRs metric — `[dashboard]`
+
+How long a task may sit in the Pull request status before it lands in the dashboard counter on
+the link screen.
+
+```ini
+[dashboard]
+stale_pull_request_hours = 24
+```
+
+Optional — 24 by default. Only working hours count: the weekdays from
+`[worktime].non_working_days` are skipped entirely. The number is also what the tile's label
+shows ("Зависшие PR > 24 ч"), so changing it here changes the interface too.
+
+---
+
+### 8. Earnings — `[salary]`, `[currency]`, `[services]`
 
 The first time log of the day that brings today's total up to `[worktime].daily_hours` opens a
 congrats modal: how much you earned today, plus a motivational quote.
@@ -441,7 +472,7 @@ keys**. If the rate can't be fetched, the earnings line is simply omitted from t
 
 ---
 
-### 8. Claude Code skill mode — `[mode]`
+### 9. Claude Code skill mode — `[mode]`
 
 If a Claude Code skill already does the commit, the PR, the review and the PR description for
 you, those checklist items are just noise. One switch hides them and adds a "Закоммитить
@@ -468,6 +499,7 @@ ticks exactly as they were.
 | Jira | Paste a link to a real task | The task key shows up on top, the checklist renders; the "time logged today" indicator appears in the top left |
 | Jira (token) | `curl -s -u "email:token" "https://your-domain.atlassian.net/rest/api/2/myself"` | JSON with your account, not a `401` |
 | The dashboard | Look above the "task link" field | The blue "Зависшие PR > 24 ч" tile with a number; clicking it opens the task list |
+| The dashboard alert dot | Open a task while a metric is above zero | A small red dot on the back arrow in the top-left corner |
 | The LLM | Reach "Создать ветку в Git" → "Сгенерировать" | A branch name lands in the field |
 | GitHub CLI | `gh auth status` | `Logged in to github.com` |
 
@@ -481,7 +513,7 @@ PHP logs when running under Docker: `docker compose logs -f app`.
 | `[llm]` | The "Сгенерировать" ("Generate") buttons (branch, commit message, PR description); the quote stays in English | Everything else; you can type the texts by hand |
 | `[github]` | Reviewers in the `gh pr create` command | The command itself is still copied |
 | `[git]`, `[templates]`, `[docs]` | The `Rebase …` entries, project names and documentation links inside the copied texts | The texts are copied without those pieces |
-| `[worktime]`, `[salary]`, `[currency]`, `[services]` | Nothing — the defaults kick in | Everything |
+| `[worktime]`, `[dashboard]`, `[salary]`, `[currency]`, `[services]` | Nothing — the defaults kick in | Everything |
 | No `params.ini` at all | Every integration | The checklist, the branch, copying texts, the progress bar |
 
 ## Troubleshooting
@@ -502,6 +534,7 @@ PHP logs when running under Docker: `docker compose logs -f app`.
 | Claude: `credit balance is too low` | Empty balance at platform.claude.com → Billing |
 | Code changes don't show up | Aggressive browser caching. Static assets are versioned by mtime automatically; under Docker run `docker compose restart` after editing |
 | The dashboard above the input field is missing | `[atlassian]` isn't configured or Jira is unreachable — there is nothing to count, so the block hides itself. Check the `myself` call above |
+| The stuck PRs counter stays at `0` with an old PR open | Days off are skipped, so the age is measured in working hours only: check `[worktime].non_working_days` and `[dashboard].stale_pull_request_hours`. Also make sure `pull_request_status` matches the status name in Jira exactly |
 | Time you just logged isn't in the list | The Jira Cloud search index updates with a delay — the app re-fetches the open task directly, the rest show up within a few seconds |
 
 ## Project structure

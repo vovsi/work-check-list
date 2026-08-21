@@ -11,7 +11,7 @@ use App\TaskRepository;
  * @OA\Post(
  *     path="/dashboard",
  *     summary="Get dashboard metrics.",
- *     description="Read-only endpoint that returns numeric dashboard metrics. For now the only metric is issues stuck in the Pull request status for more than 24 hours (with the task list behind the number).",
+ *     description="Read-only endpoint that returns numeric dashboard metrics. For now the only metric is issues stuck in the Pull request status for more than 24 working hours — days off from [worktime].non_working_days are skipped (with the task list behind the number).",
  *     @OA\RequestBody(
  *         required=false,
  *         description="No parameters",
@@ -28,6 +28,7 @@ use App\TaskRepository;
  *                  @OA\Property(property="count", type="integer", example=3),
  *                  @OA\Property(property="hours", type="integer", example=24),
  *                  @OA\Property(property="status", type="string", example="Pull request"),
+ *                  @OA\Property(property="non_working_weekdays", type="array", @OA\Items(type="integer"), example={6, 7}),
  *                  @OA\Property(property="tasks", type="array", @OA\Items(
  *                      @OA\Property(property="task_id", type="string", example="PROJ-123"),
  *                      @OA\Property(property="title", type="string", example="Fix login bug"),
